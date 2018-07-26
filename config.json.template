@@ -1,0 +1,16 @@
+{
+  "testnet-name": "devnet",
+  "private-key": "Get one using --extract",
+  "public-key": "Get it using gaiacli keys list",
+  "account-address": "Get it using gaiacli keys list",
+  "sequence": 0,
+  "account-number": 0,
+  "node": "127.0.0.1:26657",
+  "amount": "1steak",
+  "origins": [
+    "http://localhost"
+  ],
+  "redis-endpoint": "Get one from redislab",
+  "redis-password": "Get it from redislab",
+  "recaptcha-secret": "Get it from Google ReCaptcha"
+}
