@@ -3,13 +3,10 @@ package config
 import (
 	"encoding/base64"
 	"encoding/json"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
-	"github.com/greg-szabo/f11/defaults"
-	"github.com/pkg/errors"
 	"io/ioutil"
 	"os"
+	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -52,36 +49,24 @@ func GetConfigFromFile(configFile string) (*Config, error) {
 	return &cfg, nil
 }
 
-func GetConfigFromDB(dbSession *dynamodb.DynamoDB) (*Config, error) {
-	dbOutput, err := dbSession.Query(&dynamodb.QueryInput{
-		TableName:              aws.String(defaults.DynamoDBTable),
-		KeyConditionExpression: aws.String("#testnetname=:testnetname AND #testnetinstance=:testnetinstance"),
-		ExpressionAttributeNames: map[string]*string{
-			"#testnetname":     aws.String(defaults.DynamoDBTestnetNameColumn),
-			"#testnetinstance": aws.String(defaults.DynamoDBTestnetInstanceColumn),
-		},
-		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-			":testnetname": {
-				S: aws.String(defaults.TestnetName),
-			},
-			":testnetinstance": {
-				S: aws.String(defaults.TestnetInstance),
-			},
-		},
-	})
+func GetConfigFromENV() (*Config, error) {
+	config := Config{
+		TestnetName:     os.Getenv("TESTNETNAME"),
+		PrivateKey:      os.Getenv("PRIVATEKEY"),
+		PublicKey:       os.Getenv("PUBLICKEY"),
+		AccountAddress:  os.Getenv("ACCOUNTADDRESS"),
+		Node:            os.Getenv("NODE"),
+		Amount:          os.Getenv("AMOUNT"),
+		RedisEndpoint:   os.Getenv("REDISENDPOINT"),
+		RedisPassword:   os.Getenv("REDISPASSWORD"),
+		RecaptchaSecret: os.Getenv("RECAPTCHASECRET"),
+	}
+	accnum, err := strconv.ParseInt(os.Getenv("ACCOUNTNUMBER"), 10, 64)
 	if err != nil {
 		return nil, err
 	}
-	if *dbOutput.Count == 0 {
-		return nil, errors.New("no configuration found")
-	}
-	if *dbOutput.Count > 1 {
-		return nil, errors.New("ambivalent configuration found")
-	}
-	cfg := Config{}
-	err = dynamodbattribute.UnmarshalMap(dbOutput.Items[0], &cfg)
-	if err != nil {
-		return nil, err
-	}
-	return &cfg, nil
+	config.AccountNumber = accnum
+	// parse comma-seperated list of origins
+	config.Origins = strings.Split(os.Getenv("ORIGINS"), ",")
+	return &config, nil
 }

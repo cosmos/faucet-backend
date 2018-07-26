@@ -5,8 +5,8 @@ import (
 )
 
 import (
-	"github.com/greg-szabo/f11/context"
-	"github.com/greg-szabo/f11/defaults"
+	"github.com/cosmos/faucet-backend/context"
+	"github.com/cosmos/faucet-backend/defaults"
 	"net/http/httptest"
 	"testing"
 )

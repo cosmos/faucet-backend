@@ -8,9 +8,9 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/auth"
 
 	"github.com/cosmos/cosmos-sdk/x/bank/client"
+	"github.com/cosmos/faucet-backend/config"
+	f11context "github.com/cosmos/faucet-backend/context"
 	"github.com/dpapathanasiou/go-recaptcha"
-	"github.com/greg-szabo/f11/config"
-	f11context "github.com/greg-szabo/f11/context"
 	cryptoAmino "github.com/tendermint/tendermint/crypto/encoding/amino"
 	"github.com/tendermint/tendermint/libs/bech32"
 	"github.com/tomasen/realip"
