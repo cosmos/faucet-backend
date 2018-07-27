@@ -7,12 +7,12 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/cosmos/cosmos-sdk/cmd/gaia/app"
+	"github.com/cosmos/faucet-backend/config"
+	"github.com/cosmos/faucet-backend/context"
+	"github.com/cosmos/faucet-backend/defaults"
 	"github.com/dpapathanasiou/go-recaptcha"
 	"github.com/gorilla/mux"
 	"github.com/greg-szabo/dsync/ddb/sync"
-	"github.com/greg-szabo/f11/config"
-	"github.com/greg-szabo/f11/context"
-	"github.com/greg-szabo/f11/defaults"
 	rpcclient "github.com/tendermint/tendermint/rpc/client"
 	"log"
 	"net/http"
@@ -75,7 +75,7 @@ func Initialization(useDDb bool, useRDb bool, configFile string) (ctx *context.C
 
 		ctx.AwsSession = session.Must(session.NewSessionWithOptions(session.Options{Config: awsCfg}))
 		ctx.DbSession = dynamodb.New(ctx.AwsSession)
-		ctx.Cfg, err = config.GetConfigFromDB(ctx.DbSession)
+		ctx.Cfg, err = config.GetConfigFromENV()
 		if err != nil {
 			return
 		}

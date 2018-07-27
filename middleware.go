@@ -1,10 +1,10 @@
 package main
 
 import (
+	"github.com/cosmos/faucet-backend/context"
+	"github.com/cosmos/faucet-backend/defaults"
 	"github.com/go-redis/redis"
 	"github.com/gorilla/mux"
-	"github.com/greg-szabo/f11/context"
-	"github.com/greg-szabo/f11/defaults"
 	"github.com/rs/cors"
 	"github.com/throttled/throttled"
 	"github.com/throttled/throttled/store/goredisstore"
