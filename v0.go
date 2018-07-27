@@ -12,6 +12,7 @@ import (
 	rpcclient "github.com/tendermint/tendermint/rpc/client"
 	"log"
 	"net/http"
+	"fmt"
 )
 
 func MainHandler(ctx *context.Context, w http.ResponseWriter, r *http.Request) (status int, err error) {
@@ -47,6 +48,13 @@ func AddRoutes(ctx *context.Context) (r *mux.Router) {
 	return
 }
 
+func redact(s string) string {
+	if len(s) < 2 {
+		return "REDACTED"
+	}
+	return fmt.Sprintf("%sREDACTED%s",string(s[0]),string(s[len(s)-1]))
+}
+
 func Initialization(useRDb bool, configFile string) (ctx *context.Context, err error) {
 
 	ctx = context.New()
@@ -64,6 +72,14 @@ func Initialization(useRDb bool, configFile string) (ctx *context.Context, err e
 			return
 		}
 	}
+
+
+	printCfg := *ctx.Cfg
+	printCfg.PrivateKey = redact(printCfg.PrivateKey)
+	printCfg.RedisEndpoint = redact(printCfg.RedisEndpoint)
+	printCfg.RedisPassword = redact(printCfg.RedisPassword)
+	printCfg.RecaptchaSecret = redact(printCfg.RecaptchaSecret)
+	log.Printf("%+v", printCfg)
 
 	if useRDb {
 		ctx.Store, err = createRedisStore(ctx)
