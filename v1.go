@@ -136,22 +136,18 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 	// There's nothing to see here, move along.
 	memo := "faucet drop"
 
-	if ctx.DbSession != nil {
-		ctx.Mutex.Lock()
-		ctx.Cfg.Sequence, err = strconv.ParseInt(ctx.Mutex.Value, 10, 64)
-		if err != nil {
-			ctx.Mutex.Unlock()
-			return
-		}
-	} else {
-		log.Println("DynamoDB disabled, sequence number only stored in memory.")
+	ctx.Mutex.Lock()
+	sequence, err := strconv.ParseInt(ctx.Mutex.Value, 10, 64)
+	if err != nil {
+		ctx.Mutex.Unlock()
+		return
 	}
 
 	// Message
 	signMsg := auth.StdSignMsg{
 		ChainID:       ctx.Cfg.TestnetName,
 		AccountNumber: ctx.Cfg.AccountNumber,
-		Sequence:      ctx.Cfg.Sequence,
+		Sequence:      sequence,
 		Msgs:          []sdk.Msg{msg},
 		Memo:          memo,
 		Fee:           auth.NewStdFee(coreCtx.Gas, fee),
@@ -173,7 +169,7 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 		PubKey:        publicKey,
 		Signature:     sig,
 		AccountNumber: ctx.Cfg.AccountNumber,
-		Sequence:      ctx.Cfg.Sequence,
+		Sequence:      sequence,
 	}}
 
 	// marshal bytes
@@ -193,10 +189,8 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 	}
 	log.Printf("Sent transaction sequence %s", ctx.Mutex.Value)
 
-	ctx.Cfg.Sequence++
-	if ctx.DbSession != nil {
-		ctx.Mutex.Value = strconv.FormatInt(ctx.Cfg.Sequence, 10)
-	}
+	sequence++
+	ctx.Mutex.Value = strconv.FormatInt(sequence, 10)
 	ctx.Mutex.Unlock()
 
 	return res.Height, res.Hash.String(), http.StatusOK, nil

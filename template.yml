@@ -3,11 +3,21 @@ Description: F11 AWS Lambda function to send tokens
 Resources:
   LambdaFunction:
     Properties:
-      CodeUri: s3://tendermint-lambda-2/f11_gaia-7002.zip
+      FunctionName: f11 
       Policies: AmazonDynamoDBFullAccess
       Environment:
         Variables:
-          TABLE_NAME: tendermint-f11
+          TESTNETNAME:
+          PRIVATEKEY:
+          PUBLICKEY:
+          ACCOUNTADDRESS:
+          NODE:
+          AMOUNT:
+          REDISENDPOINT:
+          REDISPASSWORD:
+          RECAPTCHASECRET:
+          ACCOUNTNUMBER:
+          ORIGINS:
       Events:
         RootHandler:
           Type: Api

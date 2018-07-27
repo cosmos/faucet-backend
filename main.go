@@ -33,7 +33,7 @@ func LambdaHandler(req events.APIGatewayProxyRequest) (events.APIGatewayProxyRes
 		log.Print("cold start")
 
 		var err error
-		ctx, err := Initialization(true, true, "")
+		ctx, err := Initialization(true, "")
 		if err != nil {
 			log.Fatalf("initialization failed: %v\n", err)
 		}
@@ -58,7 +58,7 @@ func LocalExecution(localCtx *context.LocalContext) {
 	log.Print("local execution start")
 
 	var err error
-	ctx, err := Initialization(localCtx.ForceDDb, localCtx.ForceRDb, localCtx.LocalConfig)
+	ctx, err := Initialization(localCtx.ForceRDb, localCtx.LocalConfig)
 	if err != nil {
 		log.Fatalf("initialization failed: %v\n", err)
 	}
@@ -116,10 +116,9 @@ func main() {
 	flag.StringVar(&localCtx.Send, "send", "", "send a transaction with the local configuration")
 
 	flag.BoolVar(&localExecution, "webserver", false, "run a local web-server instead of as an AWS Lambda function")
-	flag.StringVar(&localCtx.LocalConfig, "config", "config.json", "read config from local file (default: config.json)")
+	flag.StringVar(&localCtx.LocalConfig, "config", "", "read config from this local file instead of environment variables")
 	flag.StringVar(&localCtx.WebserverIp, "ip", "127.0.0.1", "IP to listen on (default: 127.0.0.1) - for development and troubleshooting purposes")
 	flag.UintVar(&localCtx.WebserverPort, "port", 3000, "Port to listen on (default: 3000) - for development and troubleshooting purposes")
-	flag.BoolVar(&localCtx.ForceDDb, "force-ddb", false, "Force the use of DynamoDB even when run locally")
 	flag.BoolVar(&localCtx.ForceRDb, "force-rdb", false, "Force the use of RedisDB even when run locally")
 
 	flag.BoolVar(&defaults.DisableLimiter, "no-limit", false, "Disable rate-limiter")
@@ -130,7 +129,6 @@ func main() {
 	//--version
 	if versionSwitch {
 		fmt.Println(defaults.Version)
-		fmt.Printf("Testnet: %s\n", defaults.TestnetName)
 		fmt.Printf("SDK: %v\n", sdkversion.Version)
 		fmt.Printf("Tendermint: %v\n", tendermintversion.Version)
 	} else {

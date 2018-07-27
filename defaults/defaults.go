@@ -21,27 +21,6 @@ var Release = "0-dev"
 // Calculated value
 var Version = Major + "." + Minor + "." + Release
 
-//
-// Configuration database connection parameters. These will be overwritten during build.
-// Todo: Put them into environment variables on Lambda so they are not baked into the code.
-//
-
-// Table name
-var DynamoDBTable = ""
-
-// Key attribute names
-var DynamoDBTestnetNameColumn = "testnet-name"
-var DynamoDBTestnetInstanceColumn = "testnet-instance"
-
-// Primary key - the testnet name
-var TestnetName = "devnet"
-
-// Secondary key - the configuration version for this testnet
-var TestnetInstance = "internal"
-
-// The AWS region to use to open the AWS session
-var AWSRegion = "us-east-1"
-
 ///
 /// Rate limiter settings
 ///
