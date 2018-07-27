@@ -25,7 +25,7 @@ func Test_MainHandler(t *testing.T) {
 			status, http.StatusOK)
 	}
 
-	expected := "{\"message\":\"\",\"name\":\"" + defaults.TestnetName + "\",\"version\":\"" + defaults.Version + "\"}\n"
+	expected := "{\"message\":\"\",\"name\":\"" + ctx.Cfg.TestnetName + "\",\"version\":\"" + defaults.Version + "\"}\n"
 	if rr.Body.String() != expected {
 		t.Errorf("handler returned unexpected body: got %v want %v",
 			rr.Body.String(), expected)

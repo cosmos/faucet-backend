@@ -10,18 +10,18 @@ import (
 )
 
 type Config struct {
-	TestnetName     string   `json:"testnet-name"`
-	PrivateKey      string   `json:"private-key"`
-	PublicKey       string   `json:"public-key"`
-	AccountAddress  string   `json:"account-address"`
-	Sequence        int64    `json:"sequence"`
-	AccountNumber   int64    `json:"account-number"`
-	Node            string   `json:"node"`
-	Amount          string   `json:"amount"`
-	Origins         []string `json:"origins"`
-	RedisEndpoint   string   `json:"redis-endpoint"`
-	RedisPassword   string   `json:"redis-password"`
-	RecaptchaSecret string   `json:"recaptcha-secret"`
+	TestnetName     string   `json:"TESTNETNAME"`
+	PrivateKey      string   `json:"PRIVATEKEY"`
+	PublicKey       string   `json:"PUBLICKEY"`
+	AccountAddress  string   `json:"ACCOUNTADDRESS"`
+	AccountNumber   int64    `json:"ACCOUNTNUMBER"`
+	Node            string   `json:"NODE"`
+	Amount          string   `json:"AMOUNT"`
+	Origins         []string `json:"ORIGINS"`
+	RedisEndpoint   string   `json:"REDISENDPOINT"`
+	RedisPassword   string   `json:"REDISPASSWORD"`
+	RecaptchaSecret string   `json:"RECAPTCHASECRET"`
+	AWSRegion       string   `json:"AWSREGION"`
 }
 
 func GetPrivkeyBytesFromString(privkeystring string) ([]byte, error) {
@@ -60,6 +60,7 @@ func GetConfigFromENV() (*Config, error) {
 		RedisEndpoint:   os.Getenv("REDISENDPOINT"),
 		RedisPassword:   os.Getenv("REDISPASSWORD"),
 		RecaptchaSecret: os.Getenv("RECAPTCHASECRET"),
+		AWSRegion:       os.Getenv("AWSREGION"),
 	}
 	accnum, err := strconv.ParseInt(os.Getenv("ACCOUNTNUMBER"), 10, 64)
 	if err != nil {

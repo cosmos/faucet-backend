@@ -2,8 +2,6 @@ package context
 
 import (
 	"encoding/json"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/cosmos/cosmos-sdk/wire"
 	"github.com/cosmos/faucet-backend/config"
 	"github.com/cosmos/faucet-backend/defaults"
@@ -22,12 +20,7 @@ type Context struct {
 	// Throttled Rate Limiter Store
 	Store throttled.GCRAStore
 
-	// AWS Session connection for API calls
-	AwsSession *session.Session
-
-	// AWS DynamoDB connection
-	DbSession *dynamodb.DynamoDB
-
+	// Distributed Mutex
 	Mutex sync.Mutex
 
 	// Application configuration
@@ -50,9 +43,6 @@ type Context struct {
 }
 
 type LocalContext struct {
-	// --force-ddb Force DynamoDB database usage
-	ForceDDb bool
-
 	// --force-rdb Force RedisDB database usage
 	ForceRDb bool
 

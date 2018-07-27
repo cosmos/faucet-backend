@@ -2,10 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/cosmos/cosmos-sdk/cmd/gaia/app"
 	"github.com/cosmos/faucet-backend/config"
 	"github.com/cosmos/faucet-backend/context"
@@ -16,7 +12,7 @@ import (
 	rpcclient "github.com/tendermint/tendermint/rpc/client"
 	"log"
 	"net/http"
-	"os"
+	"fmt"
 )
 
 func MainHandler(ctx *context.Context, w http.ResponseWriter, r *http.Request) (status int, err error) {
@@ -28,7 +24,7 @@ func MainHandler(ctx *context.Context, w http.ResponseWriter, r *http.Request) (
 		Version string `json:"version"`
 	}{
 		Message: "",
-		Name:    defaults.TestnetName,
+		Name:    ctx.Cfg.TestnetName,
 		Version: defaults.Version,
 	})
 	return
@@ -52,41 +48,38 @@ func AddRoutes(ctx *context.Context) (r *mux.Router) {
 	return
 }
 
-func Initialization(useDDb bool, useRDb bool, configFile string) (ctx *context.Context, err error) {
+func redact(s string) string {
+	if len(s) < 2 {
+		return "REDACTED"
+	}
+	return fmt.Sprintf("%sREDACTED%s",string(s[0]),string(s[len(s)-1]))
+}
+
+func Initialization(useRDb bool, configFile string) (ctx *context.Context, err error) {
 
 	ctx = context.New()
-	ctx.Mutex = sync.Mutex{
-		Name:      "f11",
-		AWSRegion: defaults.AWSRegion,
-	}
 
-	if useDDb {
-		log.Printf("loading config from %s table in DynamoDB", defaults.DynamoDBTable)
-
-		awsCfg := aws.Config{
-			Region: aws.String(defaults.AWSRegion),
-		}
-
-		// Use IAM or environment variables credential
-		if (os.Getenv("AWS_ACCESS_KEY_ID") != "" && os.Getenv("AWS_SECRET_ACCESS_KEY") != "") ||
-			(os.Getenv("AWS_ACCESS_KEY") != "" && os.Getenv("AWS_SECRET_KEY") != "") {
-			awsCfg.Credentials = credentials.NewEnvCredentials()
-		}
-
-		ctx.AwsSession = session.Must(session.NewSessionWithOptions(session.Options{Config: awsCfg}))
-		ctx.DbSession = dynamodb.New(ctx.AwsSession)
-		ctx.Cfg, err = config.GetConfigFromENV()
-		if err != nil {
-			return
-		}
-
-	} else {
-		log.Printf("loading config from %s file", configFile)
+	if configFile != "" {
+		log.Printf("loading from config file %s", configFile)
 		ctx.Cfg, err = config.GetConfigFromFile(configFile)
 		if err != nil {
 			return
 		}
+	} else {
+		log.Printf("loading config from environment variables")
+		ctx.Cfg, err = config.GetConfigFromENV()
+		if err != nil {
+			return
+		}
 	}
+
+
+	printCfg := *ctx.Cfg
+	printCfg.PrivateKey = redact(printCfg.PrivateKey)
+	printCfg.RedisEndpoint = redact(printCfg.RedisEndpoint)
+	printCfg.RedisPassword = redact(printCfg.RedisPassword)
+	printCfg.RecaptchaSecret = redact(printCfg.RecaptchaSecret)
+	log.Printf("%+v", printCfg)
 
 	if useRDb {
 		ctx.Store, err = createRedisStore(ctx)
@@ -106,6 +99,11 @@ func Initialization(useDDb bool, useRDb bool, configFile string) (ctx *context.C
 	err = createThrottledLimiter(ctx)
 	if err != nil {
 		return
+	}
+
+	ctx.Mutex = sync.Mutex{
+		Name:      ctx.Cfg.TestnetName,
+		AWSRegion: ctx.Cfg.AWSRegion,
 	}
 
 	ctx.RpcClient = rpcclient.NewHTTP(ctx.Cfg.Node, "/websocket")
