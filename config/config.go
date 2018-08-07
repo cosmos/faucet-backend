@@ -68,7 +68,7 @@ func GetConfigFromENV() (*Config, error) {
 		return nil, err
 	}
 	config.AccountNumber = accnum
-	
+
 	timeout, err := strconv.ParseInt("TIMEOUT", 10, 64)
 	if err != nil {
 		return nil, err

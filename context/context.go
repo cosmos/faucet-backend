@@ -21,7 +21,7 @@ type Context struct {
 	Store throttled.GCRAStore
 
 	// Distributed Mutexes
-	Sequence sync.Mutex
+	Sequence   sync.Mutex
 	BrokenFlag sync.Mutex
 
 	// Application configuration

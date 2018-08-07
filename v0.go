@@ -2,8 +2,9 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/cosmos/cosmos-sdk/cmd/gaia/app"
+	"fmt"
 	sdkCtx "github.com/cosmos/cosmos-sdk/client/context"
+	"github.com/cosmos/cosmos-sdk/cmd/gaia/app"
 	authcmd "github.com/cosmos/cosmos-sdk/x/auth/client/cli"
 	"github.com/cosmos/faucet-backend/config"
 	"github.com/cosmos/faucet-backend/context"
@@ -14,7 +15,6 @@ import (
 	rpcclient "github.com/tendermint/tendermint/rpc/client"
 	"log"
 	"net/http"
-	"fmt"
 )
 
 func MainHandler(ctx *context.Context, w http.ResponseWriter, r *http.Request) (status int, err error) {
@@ -54,7 +54,7 @@ func redact(s string) string {
 	if len(s) < 2 {
 		return "REDACTED"
 	}
-	return fmt.Sprintf("%sREDACTED%s",string(s[0]),string(s[len(s)-1]))
+	return fmt.Sprintf("%sREDACTED%s", string(s[0]), string(s[len(s)-1]))
 }
 
 func Initialization(useRDb bool, configFile string) (ctx *context.Context, err error) {
@@ -74,7 +74,6 @@ func Initialization(useRDb bool, configFile string) (ctx *context.Context, err e
 			return
 		}
 	}
-
 
 	printCfg := *ctx.Cfg
 	printCfg.PrivateKey = redact(printCfg.PrivateKey)
@@ -108,7 +107,7 @@ func Initialization(useRDb bool, configFile string) (ctx *context.Context, err e
 		AWSRegion: ctx.Cfg.AWSRegion,
 	}
 	ctx.BrokenFlag = sync.Mutex{
-		Name: fmt.Sprintf("%s-brokenflag", ctx.Cfg.TestnetName),
+		Name:      fmt.Sprintf("%s-brokenflag", ctx.Cfg.TestnetName),
 		AWSRegion: ctx.Cfg.AWSRegion,
 	}
 

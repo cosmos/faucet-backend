@@ -3,13 +3,13 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"time"
 	"github.com/cosmos/cosmos-sdk/client/context"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/auth"
+	"time"
 
-	"github.com/cosmos/cosmos-sdk/x/bank/client"
 	authcmd "github.com/cosmos/cosmos-sdk/x/auth/client/cli"
+	"github.com/cosmos/cosmos-sdk/x/bank/client"
 	"github.com/cosmos/faucet-backend/config"
 	f11context "github.com/cosmos/faucet-backend/context"
 	"github.com/dpapathanasiou/go-recaptcha"
@@ -191,7 +191,7 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 		res, err := coreCtx.BroadcastTx(txBytes)
 		cres <- AsyncResponse{
 			Result: res,
-			Error: err,
+			Error:  err,
 		}
 	}()
 
@@ -225,5 +225,5 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 
 type AsyncResponse struct {
 	Result *ctypes.ResultBroadcastTxCommit
-	Error error
+	Error  error
 }
