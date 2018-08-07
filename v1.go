@@ -203,10 +203,11 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 
 	select {
 	case response := <-cres:
-		res, err := response.Result, response.Error
+		var res *ctypes.ResultBroadcastTxCommit
+		res, err = response.Result, response.Error
 		if err != nil {
 			ctx.Sequence.Unlock()
-			return 0, "", 0, err
+			return
 		}
 		log.Printf("Sent transaction sequence %s", ctx.Sequence.Value)
 		sequence++
@@ -218,6 +219,7 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 		ctx.BrokenFlag.Value = "broken"
 		ctx.Sequence.Unlock()
 		ctx.BrokenFlag.Unlock()
+		err = errors.New("Broadcasting transaction timed out")
 		return
 
 	}
