@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"github.com/cosmos/cosmos-sdk/cmd/gaia/app"
+	sdkCtx "github.com/cosmos/cosmos-sdk/client/context"
+	authcmd "github.com/cosmos/cosmos-sdk/x/auth/client/cli"
 	"github.com/cosmos/faucet-backend/config"
 	"github.com/cosmos/faucet-backend/context"
 	"github.com/cosmos/faucet-backend/defaults"
@@ -101,10 +103,42 @@ func Initialization(useRDb bool, configFile string) (ctx *context.Context, err e
 		return
 	}
 
-	ctx.Mutex = sync.Mutex{
+	ctx.Sequence = sync.Mutex{
 		Name:      ctx.Cfg.TestnetName,
 		AWSRegion: ctx.Cfg.AWSRegion,
 	}
+	ctx.BrokenFlag = sync.Mutex{
+		Name: fmt.Sprintf("%s-brokenflag", ctx.Cfg.TestnetName),
+		AWSRegion: ctx.Cfg.AWSRegion,
+	}
+
+	ctx.BrokenFlag.Lock()
+	if ctx.BrokenFlag.Value == "broken" {
+		coreCtx := sdkCtx.CoreContext{
+			ChainID:         ctx.Cfg.TestnetName,
+			Height:          0,
+			Gas:             200000,
+			TrustNode:       false,
+			NodeURI:         ctx.Cfg.Node,
+			FromAddressName: "faucetAccount",
+			AccountNumber:   0,
+			Sequence:        0,
+			Client:          ctx.RpcClient,
+			Decoder:         authcmd.GetAccountDecoder(ctx.Cdc),
+			AccountStore:    "acc",
+		}
+
+		ctx.Sequence.Lock()
+		seq, err := coreCtx.NextSequence([]byte(ctx.Cfg.AccountAddress))
+		if err != nil {
+			return nil, err
+		}
+		ctx.Sequence.Value = string(seq)
+		ctx.Sequence.Unlock()
+		// Reset broken flag
+		ctx.BrokenFlag.Value = "0"
+	}
+	ctx.BrokenFlag.Unlock()
 
 	ctx.RpcClient = rpcclient.NewHTTP(ctx.Cfg.Node, "/websocket")
 	ctx.Cdc = app.MakeCodec()

@@ -20,8 +20,9 @@ type Context struct {
 	// Throttled Rate Limiter Store
 	Store throttled.GCRAStore
 
-	// Distributed Mutex
-	Mutex sync.Mutex
+	// Distributed Mutexes
+	Sequence sync.Mutex
+	BrokenFlag sync.Mutex
 
 	// Application configuration
 	Cfg *config.Config
