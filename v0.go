@@ -120,7 +120,7 @@ func Initialization(useRDb bool, configFile string) (ctx *context.Context, err e
 			TrustNode:       false,
 			NodeURI:         ctx.Cfg.Node,
 			FromAddressName: "faucetAccount",
-			AccountNumber:   0,
+			AccountNumber:   ctx.Cfg.AccountNumber,
 			Sequence:        0,
 			Client:          ctx.RpcClient,
 			Decoder:         authcmd.GetAccountDecoder(ctx.Cdc),
