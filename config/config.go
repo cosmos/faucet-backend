@@ -22,6 +22,7 @@ type Config struct {
 	RedisPassword   string   `json:"REDISPASSWORD"`
 	RecaptchaSecret string   `json:"RECAPTCHASECRET"`
 	AWSRegion       string   `json:"AWSREGION"`
+	Timeout         int64    `json:"TIMEOUT"`
 }
 
 func GetPrivkeyBytesFromString(privkeystring string) ([]byte, error) {
@@ -67,6 +68,12 @@ func GetConfigFromENV() (*Config, error) {
 		return nil, err
 	}
 	config.AccountNumber = accnum
+
+	timeout, err := strconv.ParseInt("TIMEOUT", 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	config.Timeout = timeout
 	// parse comma-seperated list of origins
 	config.Origins = strings.Split(os.Getenv("ORIGINS"), ",")
 	return &config, nil

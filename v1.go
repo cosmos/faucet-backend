@@ -6,13 +6,16 @@ import (
 	"github.com/cosmos/cosmos-sdk/client/context"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/auth"
+	"time"
 
+	authcmd "github.com/cosmos/cosmos-sdk/x/auth/client/cli"
 	"github.com/cosmos/cosmos-sdk/x/bank/client"
 	"github.com/cosmos/faucet-backend/config"
 	f11context "github.com/cosmos/faucet-backend/context"
 	"github.com/dpapathanasiou/go-recaptcha"
 	cryptoAmino "github.com/tendermint/tendermint/crypto/encoding/amino"
 	"github.com/tendermint/tendermint/libs/bech32"
+	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 	"github.com/tomasen/realip"
 	"log"
 	"net/http"
@@ -120,7 +123,7 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 		AccountNumber:   0,
 		Sequence:        0,
 		Client:          ctx.RpcClient,
-		Decoder:         nil, //authcmd.GetAccountDecoder(cdc),
+		Decoder:         authcmd.GetAccountDecoder(ctx.Cdc),
 		AccountStore:    "acc",
 	}
 
@@ -136,10 +139,10 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 	// There's nothing to see here, move along.
 	memo := "faucet drop"
 
-	ctx.Mutex.Lock()
-	sequence, err := strconv.ParseInt(ctx.Mutex.Value, 10, 64)
+	ctx.Sequence.Lock()
+	sequence, err := strconv.ParseInt(ctx.Sequence.Value, 10, 64)
 	if err != nil {
-		ctx.Mutex.Unlock()
+		ctx.Sequence.Unlock()
 		return
 	}
 
@@ -157,7 +160,7 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 	// Get private key
 	privateKeyBytes, err := config.GetPrivkeyBytesFromString(ctx.Cfg.PrivateKey)
 	if err != nil {
-		ctx.Mutex.Unlock()
+		ctx.Sequence.Unlock()
 		return
 	}
 	privateKey, err := cryptoAmino.PrivKeyFromBytes(privateKeyBytes)
@@ -178,21 +181,51 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 	// Broadcast to Tendermint
 	txBytes, err := ctx.Cdc.MarshalBinary(tx)
 	if err != nil {
-		ctx.Mutex.Unlock()
+		ctx.Sequence.Unlock()
 		return
 	}
-	log.Printf("Sending transaction sequence %s", ctx.Mutex.Value)
-	res, err := coreCtx.BroadcastTx(txBytes)
-	if err != nil {
-		ctx.Mutex.Unlock()
+	log.Printf("Sending transaction sequence %s", ctx.Sequence.Value)
+
+	cres := make(chan AsyncResponse, 1)
+	go func() {
+		res, err := coreCtx.BroadcastTx(txBytes)
+		cres <- AsyncResponse{
+			Result: res,
+			Error:  err,
+		}
+	}()
+
+	timeout := make(chan bool, 1)
+	go func() {
+		time.Sleep(time.Duration(ctx.Cfg.Timeout) * time.Second)
+		timeout <- true
+	}()
+
+	select {
+	case response := <-cres:
+		var res *ctypes.ResultBroadcastTxCommit
+		res, err = response.Result, response.Error
+		if err != nil {
+			ctx.Sequence.Unlock()
+			return
+		}
+		log.Printf("Sent transaction sequence %s", ctx.Sequence.Value)
+		sequence++
+		ctx.Sequence.Value = strconv.FormatInt(sequence, 10)
+		ctx.Sequence.Unlock()
+		return res.Height, res.Hash.String(), http.StatusOK, nil
+	case <-timeout:
+		ctx.BrokenFlag.Lock()
+		ctx.BrokenFlag.Value = "broken"
+		ctx.Sequence.Unlock()
+		ctx.BrokenFlag.Unlock()
+		err = errors.New("Broadcasting transaction timed out")
 		return
+
 	}
-	log.Printf("Sent transaction sequence %s", ctx.Mutex.Value)
+}
 
-	sequence++
-	ctx.Mutex.Value = strconv.FormatInt(sequence, 10)
-	ctx.Mutex.Unlock()
-
-	return res.Height, res.Hash.String(), http.StatusOK, nil
-
+type AsyncResponse struct {
+	Result *ctypes.ResultBroadcastTxCommit
+	Error  error
 }
