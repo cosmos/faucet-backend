@@ -31,11 +31,11 @@
 
 [[override]]
   name = "github.com/tendermint/tendermint"
-  version = "0.22.6"
+  version = "0.23.0"
 
 [[constraint]]
   name = "github.com/cosmos/cosmos-sdk"
-  version = "0.23.0"
+  version = "0.24.2"
 
 [[override]]
     name = "github.com/golang/protobuf"

@@ -1,11 +1,14 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	sdkCtx "github.com/cosmos/cosmos-sdk/client/context"
+	"github.com/cosmos/cosmos-sdk/client/keys"
 	"github.com/cosmos/cosmos-sdk/cmd/gaia/app"
 	authcmd "github.com/cosmos/cosmos-sdk/x/auth/client/cli"
+	authctx "github.com/cosmos/cosmos-sdk/x/auth/client/context"
 	"github.com/cosmos/faucet-backend/config"
 	"github.com/cosmos/faucet-backend/context"
 	"github.com/cosmos/faucet-backend/defaults"
@@ -15,6 +18,8 @@ import (
 	rpcclient "github.com/tendermint/tendermint/rpc/client"
 	"log"
 	"net/http"
+	"os"
+	"os/user"
 )
 
 func MainHandler(ctx *context.Context, w http.ResponseWriter, r *http.Request) (status int, err error) {
@@ -52,18 +57,21 @@ func AddRoutes(ctx *context.Context) (r *mux.Router) {
 
 func redact(s string) string {
 	if len(s) < 2 {
-		return "REDACTED"
+		return "RD"
 	}
-	return fmt.Sprintf("%sREDACTED%s", string(s[0]), string(s[len(s)-1]))
+	return "REDACTED"
 }
 
-func Initialization(useRDb bool, configFile string) (ctx *context.Context, err error) {
+func Initialization(initialContext *context.InitialContext) (ctx *context.Context, err error) {
 
 	ctx = context.New()
+	ctx.DisableLimiter = initialContext.DisableLimiter
+	ctx.DisableRecaptcha = initialContext.DisableRecaptcha
+	ctx.DisableSend = initialContext.DisableSend
 
-	if configFile != "" {
-		log.Printf("loading from config file %s", configFile)
-		ctx.Cfg, err = config.GetConfigFromFile(configFile)
+	if initialContext.LocalExecution {
+		log.Printf("loading from config file %s", initialContext.ConfigFile)
+		ctx.Cfg, err = config.GetConfigFromFile(initialContext.ConfigFile)
 		if err != nil {
 			return
 		}
@@ -82,13 +90,13 @@ func Initialization(useRDb bool, configFile string) (ctx *context.Context, err e
 	printCfg.RecaptchaSecret = redact(printCfg.RecaptchaSecret)
 	log.Printf("%+v", printCfg)
 
-	if useRDb {
-		ctx.Store, err = createRedisStore(ctx)
+	if initialContext.DisableRDb {
+		ctx.Store, err = createMemStore()
 		if err != nil {
 			return
 		}
 	} else {
-		ctx.Store, err = createMemStore()
+		ctx.Store, err = createRedisStore(ctx)
 		if err != nil {
 			return
 		}
@@ -96,6 +104,20 @@ func Initialization(useRDb bool, configFile string) (ctx *context.Context, err e
 	}
 
 	log.Printf("config for %s loaded", ctx.Cfg.TestnetName)
+
+	cliContext := sdkCtx.NewCLIContext().
+		WithCodec(ctx.Cdc).
+		WithLogger(os.Stdout).
+		WithAccountDecoder(authcmd.GetAccountDecoder(ctx.Cdc)).
+		WithNodeURI(ctx.Cfg.Node)
+	ctx.CLIContext = &cliContext
+
+	txCtx := authctx.TxContext{
+		ChainID:       ctx.Cfg.TestnetName,
+		Gas:           20000,
+	}.WithCodec(ctx.Cdc)
+
+	ctx.TxContest = &txCtx
 
 	err = createThrottledLimiter(ctx)
 	if err != nil {
@@ -113,27 +135,17 @@ func Initialization(useRDb bool, configFile string) (ctx *context.Context, err e
 
 	ctx.BrokenFlag.Lock()
 	if ctx.BrokenFlag.Value == "broken" {
-		coreCtx := sdkCtx.CoreContext{
-			ChainID:         ctx.Cfg.TestnetName,
-			Height:          0,
-			Gas:             200000,
-			TrustNode:       false,
-			NodeURI:         ctx.Cfg.Node,
-			FromAddressName: "faucetAccount",
-			AccountNumber:   ctx.Cfg.AccountNumber,
-			Sequence:        0,
-			Client:          ctx.RpcClient,
-			Decoder:         authcmd.GetAccountDecoder(ctx.Cdc),
-			AccountStore:    "acc",
-		}
 
 		ctx.Sequence.Lock()
-		seq, err := coreCtx.NextSequence([]byte(ctx.Cfg.AccountAddress))
+		ctx.Sequence.Value = "0"
+//Todo: create a GetAccountSequence without using the KeyBase
+/*		seq, err :=	ctx.CLIContext.GetAccountSequence([]byte(ctx.Cfg.AccountAddress))
 		if err != nil {
 			return nil, err
 		}
 		ctx.Sequence.Value = string(seq)
-		ctx.Sequence.Unlock()
+*/		ctx.Sequence.Unlock()
+
 		// Reset broken flag
 		ctx.BrokenFlag.Value = "0"
 	}
@@ -145,4 +157,26 @@ func Initialization(useRDb bool, configFile string) (ctx *context.Context, err e
 	recaptcha.Init(ctx.Cfg.RecaptchaSecret)
 
 	return
+}
+
+func GetPrivkeyBytesFromString(privkeystring string) ([]byte, error) {
+	return base64.StdEncoding.DecodeString(privkeystring)
+}
+
+func GetStringFromPrivkeyBytes(privkeybytes []byte) (string) {
+	return base64.StdEncoding.EncodeToString(privkeybytes)
+}
+
+// ValarDragon is the best! (He wrote this function.)
+func GetPrivkeyBytesFromUserFile(name string, passphrase string) []byte {
+	usr, err := user.Current()
+	if err != nil {
+		fmt.Println("Error couldn't get user", err)
+		return nil
+	}
+	homeDir := usr.HomeDir
+	gaiacliHome := fmt.Sprintf("%s%s.gaiacli", homeDir, string(os.PathSeparator))
+	keybase, _ := keys.GetKeyBaseFromDir(gaiacliHome)
+	privkey, _ := keybase.ExportPrivateKeyObject(name, passphrase)
+	return privkey.Bytes()
 }

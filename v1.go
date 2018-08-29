@@ -3,17 +3,14 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"github.com/cosmos/cosmos-sdk/client/context"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/auth"
 	"time"
 
-	authcmd "github.com/cosmos/cosmos-sdk/x/auth/client/cli"
 	"github.com/cosmos/cosmos-sdk/x/bank/client"
-	"github.com/cosmos/faucet-backend/config"
 	f11context "github.com/cosmos/faucet-backend/context"
 	"github.com/dpapathanasiou/go-recaptcha"
-	cryptoAmino "github.com/tendermint/tendermint/crypto/encoding/amino"
+	"github.com/tendermint/tendermint/crypto/encoding/amino"
 	"github.com/tendermint/tendermint/libs/bech32"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 	"github.com/tomasen/realip"
@@ -113,20 +110,6 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 		return
 	}
 
-	coreCtx := context.CoreContext{
-		ChainID:         ctx.Cfg.TestnetName,
-		Height:          0,
-		Gas:             200000,
-		TrustNode:       false,
-		NodeURI:         ctx.Cfg.Node,
-		FromAddressName: "faucetAccount",
-		AccountNumber:   0,
-		Sequence:        0,
-		Client:          ctx.RpcClient,
-		Decoder:         authcmd.GetAccountDecoder(ctx.Cdc),
-		AccountStore:    "acc",
-	}
-
 	//Todo: Implement account check for enough coins
 	//Derive coin number from sequence number (c - s = remaining coins)
 
@@ -153,12 +136,12 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 		Sequence:      sequence,
 		Msgs:          []sdk.Msg{msg},
 		Memo:          memo,
-		Fee:           auth.NewStdFee(coreCtx.Gas, fee),
+		Fee:           auth.NewStdFee(ctx.TxContest.Gas, fee),
 	}
 	bz := signMsg.Bytes()
 
 	// Get private key
-	privateKeyBytes, err := config.GetPrivkeyBytesFromString(ctx.Cfg.PrivateKey)
+	privateKeyBytes, err := GetPrivkeyBytesFromString(ctx.Cfg.PrivateKey)
 	if err != nil {
 		ctx.Sequence.Unlock()
 		return
@@ -188,7 +171,7 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 
 	cres := make(chan AsyncResponse, 1)
 	go func() {
-		res, err := coreCtx.BroadcastTx(txBytes)
+		res, err := ctx.CLIContext.BroadcastTx(txBytes)
 		cres <- AsyncResponse{
 			Result: res,
 			Error:  err,
@@ -217,9 +200,9 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 	case <-timeout:
 		ctx.BrokenFlag.Lock()
 		ctx.BrokenFlag.Value = "broken"
-		ctx.Sequence.Unlock()
 		ctx.BrokenFlag.Unlock()
-		err = errors.New("Broadcasting transaction timed out")
+		ctx.Sequence.Unlock()
+		err = errors.New("broadcasting transaction timed out")
 		return
 
 	}

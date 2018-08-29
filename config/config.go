@@ -1,9 +1,7 @@
 package config
 
 import (
-	"encoding/base64"
-	"encoding/json"
-	"io/ioutil"
+	"github.com/go-ini/ini"
 	"os"
 	"strconv"
 	"strings"
@@ -25,24 +23,30 @@ type Config struct {
 	Timeout         int64    `json:"TIMEOUT"`
 }
 
-func GetPrivkeyBytesFromString(privkeystring string) ([]byte, error) {
-	return base64.StdEncoding.DecodeString(privkeystring)
-}
-
 func GetConfigFromFile(configFile string) (*Config, error) {
-	jsonFile, err := os.Open(configFile)
-	if err != nil {
-		return nil, err
-	}
-	defer jsonFile.Close()
-
-	byteValue, err := ioutil.ReadAll(jsonFile)
+	inicfg, err := ini.Load(configFile)
 	if err != nil {
 		return nil, err
 	}
 
-	cfg := Config{}
-	err = json.Unmarshal(byteValue, &cfg)
+	cfg := Config{
+		TestnetName:     inicfg.Section("").Key("TESTNETNAME").String(),
+		PrivateKey:      inicfg.Section("").Key("PRIVATEKEY").String(),
+		PublicKey:       inicfg.Section("").Key("PUBLICKEY").String(),
+		AccountAddress:  inicfg.Section("").Key("ACCOUNTADDRESS").String(),
+		Node:            inicfg.Section("").Key("NODE").String(),
+		Amount:          inicfg.Section("").Key("AMOUNT").String(),
+		Origins:         inicfg.Section("").Key("ORIGINS").Strings(","),
+		RedisEndpoint:   inicfg.Section("").Key("REDISENDPOINT").String(),
+		RedisPassword:   inicfg.Section("").Key("REDISPASSWORD").String(),
+		RecaptchaSecret: inicfg.Section("").Key("RECAPTCHASECRET").String(),
+		AWSRegion:       inicfg.Section("").Key("AWSREGION").String(),
+	}
+	cfg.AccountNumber, err = inicfg.Section("").Key("ACCOUNTNUMBER").Int64()
+	if err != nil {
+		return nil, err
+	}
+	cfg.Timeout, err = inicfg.Section("").Key("TIMEOUT").Int64()
 	if err != nil {
 		return nil, err
 	}
@@ -69,12 +73,12 @@ func GetConfigFromENV() (*Config, error) {
 	}
 	config.AccountNumber = accnum
 
-	timeout, err := strconv.ParseInt("TIMEOUT", 10, 64)
+	timeout, err := strconv.ParseInt(os.Getenv("TIMEOUT"), 10, 64)
 	if err != nil {
 		return nil, err
 	}
 	config.Timeout = timeout
-	// parse comma-seperated list of origins
+	// parse comma-separated list of origins
 	config.Origins = strings.Split(os.Getenv("ORIGINS"), ",")
 	return &config, nil
 }

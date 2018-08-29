@@ -12,7 +12,7 @@ import "github.com/throttled/throttled"
 // Versioning
 //
 const Major = "0"
-const Minor = "1"
+const Minor = "2"
 const ContentType = "application/json; charset=utf8"
 
 // This will be overwritten during build. Do not try to manage it here.
@@ -28,16 +28,3 @@ var Version = Major + "." + Minor + "." + Release
 var LimiterMaxRate = throttled.PerMin(60)
 
 var LimiterMaxBurst = 0
-
-//
-// Values for testing - do not use in production environment
-//
-
-// (--no-limit) Disable rate limiter
-var DisableLimiter = false
-
-// (--no-send) Disable transaction send to the blockchain network
-var DisableSend = false
-
-// (--no-recaptcha) Disable recaptcha
-var DisableRecaptcha = false

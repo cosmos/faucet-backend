@@ -1,0 +1,38 @@
+# Name of the blockchain network
+TESTNETNAME     = gaia-8001
+
+# Private key of the faucet wallet
+PRIVATEKEY      = get_one_with_the_f11_-export_option
+
+# Public key of the faucet wallet
+PUBLICKEY       = gaiacli_keys_can_give_this_to_you
+
+# Wallet address of the faucet wallet
+ACCOUNTADDRESS  = gaiacli_keys_can_give_this_to_you
+
+# Account number on the network for the faucet wallet
+ACCOUNTNUMBER   = gaiacli_account_can_give_this_to_you
+
+# Network node to use for transactions
+NODE            = 127.0.0.1:26657
+
+# Amount of tokens to give out on the faucet
+AMOUNT          = 10steak
+
+# Cross-site scripting origins to enable
+ORIGINS         = http://localhost
+
+# Redis Endpoint for the throttled limiter storage
+REDISENDPOINT   = get_one_from_redislabs
+
+# Redis password for the throttled limiter storage
+REDISPASSWORD   = get_one_from_redislabs
+
+# Recaptcha secret
+RECAPTCHASECRET = get_one_from_Google
+
+# Timeout value before we stop trying to connect to the network node
+TIMEOUT         = 60
+
+# AWS Region for the distributed DynamoDB mutex
+AWSREGION       = us-east-1

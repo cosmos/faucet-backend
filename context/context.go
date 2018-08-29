@@ -10,6 +10,8 @@ import (
 	"github.com/throttled/throttled"
 	"log"
 	"net/http"
+	sdkCtx "github.com/cosmos/cosmos-sdk/client/context"
+	authctx "github.com/cosmos/cosmos-sdk/x/auth/client/context"
 )
 
 type Context struct {
@@ -41,11 +43,17 @@ type Context struct {
 
 	// Blockchain network socket connection details
 	RpcClient *rpcclient.HTTP
+
+	// The new CLIContext for connecting to a network
+	CLIContext *sdkCtx.CLIContext
+
+	// The new TxContext for sending a transaction on the network
+	TxContest *authctx.TxContext
 }
 
-type LocalContext struct {
-	// --force-rdb Force RedisDB database usage
-	ForceRDb bool
+type InitialContext struct {
+	// --no-rdb disable RedisDB database usage
+	DisableRDb bool
 
 	// --send Send to a wallet locally
 	Send string
@@ -57,24 +65,27 @@ type LocalContext struct {
 	WebserverPort uint
 
 	// --config Config file for local execution
-	LocalConfig string
+	ConfigFile string
+
+	// --webserver or --send was set
+	LocalExecution bool
+
+	// (--no-limit) Disable rate limiter
+	DisableLimiter bool
+
+	// (--no-send) Disable transaction send to the blockchain network
+	DisableSend bool
+
+	// (--no-recaptcha) Disable recaptcha
+	DisableRecaptcha bool
 }
 
 func New() *Context {
-	return &Context{
-		DisableLimiter:   defaults.DisableLimiter,
-		DisableSend:      defaults.DisableSend,
-		DisableRecaptcha: defaults.DisableRecaptcha,
-	}
-
+	return &Context{}
 }
 
-func NewLocal() *LocalContext {
-	return &LocalContext{
-		WebserverIp:   "127.0.0.1",
-		WebserverPort: 3000,
-		LocalConfig:   "config.json",
-	}
+func NewInitialContext() *InitialContext {
+	return &InitialContext{}
 }
 
 type ErrorMessage struct {

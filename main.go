@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/base64"
 	"flag"
 	"fmt"
 	"github.com/aws/aws-lambda-go/events"
@@ -11,12 +10,12 @@ import (
 	"github.com/cosmos/faucet-backend/defaults"
 	tendermintversion "github.com/tendermint/tendermint/version"
 	"log"
+	"os/signal"
+	"syscall"
 
-	"github.com/cosmos/cosmos-sdk/client/keys"
 	"github.com/cosmos/faucet-backend/context"
 	"net/http"
 	"os"
-	"os/user"
 	"time"
 )
 
@@ -33,7 +32,7 @@ func LambdaHandler(req events.APIGatewayProxyRequest) (events.APIGatewayProxyRes
 		log.Print("cold start")
 
 		var err error
-		ctx, err := Initialization(true, "")
+		ctx, err := Initialization(context.NewInitialContext())
 		if err != nil {
 			log.Fatalf("initialization failed: %v\n", err)
 		}
@@ -47,32 +46,20 @@ func LambdaHandler(req events.APIGatewayProxyRequest) (events.APIGatewayProxyRes
 
 	}
 
-	//Todo: Add lambda timeout function so a response is made before the function times out in AWS
-	//(Default Lambda timeout is 3 seconds.)
-
 	return lambdaProxy(req)
 
 }
 
-func LocalExecution(localCtx *context.LocalContext) {
-	log.Print("local execution start")
+func WebserverHandler(localCtx *context.InitialContext) {
+	log.Print("webserver execution start")
 
 	var err error
-	ctx, err := Initialization(localCtx.ForceRDb, localCtx.LocalConfig)
+	ctx, err := Initialization(localCtx)
 	if err != nil {
 		log.Fatalf("initialization failed: %v\n", err)
 	}
 
 	r := AddRoutes(ctx)
-
-	if localCtx.Send != "" {
-		height, hash, errType, err := V1SendTx(ctx, localCtx.Send)
-		if err != nil {
-			log.Fatalf("(%d): %v", errType, err)
-		}
-		log.Printf("transaction committed. Hash: %s, Block height: %d", hash, height)
-		return
-	}
 
 	srv := &http.Server{
 		Addr: fmt.Sprintf("%s:%d", localCtx.WebserverIp, localCtx.WebserverPort),
@@ -83,47 +70,60 @@ func LocalExecution(localCtx *context.LocalContext) {
 		Handler:      r,
 	}
 
-	// Run our server in a goroutine so that it doesn't block.
+	var gracefulStop = make(chan os.Signal)
+	signal.Notify(gracefulStop, syscall.SIGTERM)
+	signal.Notify(gracefulStop, syscall.SIGINT)
+	go func() {
+		sig := <-gracefulStop
+		log.Printf("caught signal: %+v", sig)
+		log.Print("waiting 2 seconds to finish processing")
+		time.Sleep(2*time.Second)
+		os.Exit(0)
+	}()
+
 	if err := srv.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }
 
-// ValarDragon is the best! (He wrote this function.)
-func GetPrivkeyBytesFromUserFile(name string, passphrase string) []byte {
-	usr, err := user.Current()
+func sendTransactionHandler(localCtx *context.InitialContext) {
+	log.Print("Send one transaction")
+
+	var err error
+	localCtx.LocalExecution = true // Read config from local file
+	ctx, err := Initialization(localCtx)
 	if err != nil {
-		fmt.Println("Error couldn't get user", err)
-		return nil
+		log.Fatalf("initialization failed: %v\n", err)
 	}
-	homeDir := usr.HomeDir
-	gaiacliHome := fmt.Sprintf("%s%s.gaiacli", homeDir, string(os.PathSeparator))
-	keybase, _ := keys.GetKeyBaseFromDir(gaiacliHome)
-	privkey, _ := keybase.ExportPrivateKeyObject(name, passphrase)
-	return privkey.Bytes()
+
+	height, hash, errType, err := V1SendTx(ctx, localCtx.Send)
+	if err != nil {
+		log.Fatalf("(%d): %v", errType, err)
+	}
+	log.Printf("transaction committed. Hash: %s, Block height: %d", hash, height)
+	return
 }
 
 func main() {
-	var versionSwitch bool  //--version
-	var extract string      //--extract
-	var localExecution bool //--webserver
+	var versionSwitch bool //--version
+	var extract string     //--extract
 
-	localCtx := context.NewLocal()
+	initialCtx := context.NewInitialContext()
 
 	// All command-line parameters are only for development and troubleshooting purposes
 	flag.BoolVar(&versionSwitch, "version", false, "Return version number and exit.")
 	flag.StringVar(&extract, "extract", "", "Extract private key bytes from your local storage. Get passphrase from $PASSPHRASE environment variable")
-	flag.StringVar(&localCtx.Send, "send", "", "send a transaction with the local configuration")
+	flag.StringVar(&initialCtx.Send, "send", "", "send a transaction with the local configuration")
 
-	flag.BoolVar(&localExecution, "webserver", false, "run a local web-server instead of as an AWS Lambda function")
-	flag.StringVar(&localCtx.LocalConfig, "config", "", "read config from this local file instead of environment variables")
-	flag.StringVar(&localCtx.WebserverIp, "ip", "127.0.0.1", "IP to listen on (default: 127.0.0.1) - for development and troubleshooting purposes")
-	flag.UintVar(&localCtx.WebserverPort, "port", 3000, "Port to listen on (default: 3000) - for development and troubleshooting purposes")
-	flag.BoolVar(&localCtx.ForceRDb, "force-rdb", false, "Force the use of RedisDB even when run locally")
+	flag.BoolVar(&initialCtx.LocalExecution, "webserver", false, "run a local web-server instead of as an AWS Lambda function")
+	flag.StringVar(&initialCtx.ConfigFile, "config", "f11.conf", "read config from this local file (default: f11.conf) - Lambda uses environment variables")
+	flag.StringVar(&initialCtx.WebserverIp, "ip", "127.0.0.1", "IP to listen on (default: 127.0.0.1)")
+	flag.UintVar(&initialCtx.WebserverPort, "port", 3000, "Port to listen on (default: 3000)")
+	flag.BoolVar(&initialCtx.DisableRDb, "no-rdb", false, "Disable the use of RedisDB")
 
-	flag.BoolVar(&defaults.DisableLimiter, "no-limit", false, "Disable rate-limiter")
-	flag.BoolVar(&defaults.DisableSend, "no-send", false, "Do not send the transaction to the blockchain network")
-	flag.BoolVar(&defaults.DisableRecaptcha, "no-recaptcha", false, "Disable recaptcha checks")
+	flag.BoolVar(&initialCtx.DisableLimiter, "no-limit", false, "Disable rate-limiter")
+	flag.BoolVar(&initialCtx.DisableSend, "no-send", false, "Do not send the transaction to the blockchain network")
+	flag.BoolVar(&initialCtx.DisableRecaptcha, "no-recaptcha", false, "Disable recaptcha checks")
 	flag.Parse()
 
 	//--version
@@ -135,15 +135,20 @@ func main() {
 		//--extract
 		if extract != "" {
 			privateKeyBytes := GetPrivkeyBytesFromUserFile(extract, os.Getenv("PASSPHRASE"))
-			privateKeyString := base64.StdEncoding.EncodeToString(privateKeyBytes)
+			privateKeyString := GetStringFromPrivkeyBytes(privateKeyBytes)
 			fmt.Println(privateKeyString)
 		} else {
-			//--webserver or --send
-			if localCtx.Send != "" || localExecution {
-				LocalExecution(localCtx)
+			//--send
+			if initialCtx.Send != "" {
+				sendTransactionHandler(initialCtx)
 			} else {
-				//no input parameters
-				lambda.Start(LambdaHandler)
+				//--webserver
+				if initialCtx.LocalExecution {
+					WebserverHandler(initialCtx)
+				} else {
+					//Lambda function on AWS
+					lambda.Start(LambdaHandler)
+				}
 			}
 		}
 	}
