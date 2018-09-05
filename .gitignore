@@ -3,3 +3,4 @@ build/*
 vendor/*
 Gopkg.lock
 f11.conf
+f11.json

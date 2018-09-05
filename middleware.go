@@ -64,7 +64,7 @@ func createRedisStore(ctx *context.Context) (throttled.GCRAStore, error) {
 		Addr:     ctx.Cfg.RedisEndpoint,
 		Password: ctx.Cfg.RedisPassword,
 		DB:       0,
-	}), ctx.Cfg.TestnetName)
+	}), ctx.TestnetName)
 }
 
 // Create throttled rate limiter with memstore for local execution

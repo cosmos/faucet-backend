@@ -1,6 +1,3 @@
-# Name of the blockchain network
-TESTNETNAME     = gaia-8001
-
 # Private key of the faucet wallet
 PRIVATEKEY      = get_one_with_the_f11_-export_option
 
@@ -10,11 +7,11 @@ PUBLICKEY       = gaiacli_keys_can_give_this_to_you
 # Wallet address of the faucet wallet
 ACCOUNTADDRESS  = gaiacli_keys_can_give_this_to_you
 
-# Account number on the network for the faucet wallet
-ACCOUNTNUMBER   = gaiacli_account_can_give_this_to_you
-
 # Network node to use for transactions
-NODE            = 127.0.0.1:26657
+NODE            = http://127.0.0.1:26657
+
+# LCD Node to use for getting wallet details
+LCDNODE         = http://127.0.0.1:1317
 
 # Amount of tokens to give out on the faucet
 AMOUNT          = 10steak
@@ -31,7 +28,7 @@ REDISPASSWORD   = get_one_from_redislabs
 # Recaptcha secret
 RECAPTCHASECRET = get_one_from_Google
 
-# Timeout value before we stop trying to connect to the network node
+# Timeout value before we stop trying to broadcasting to the network node
 TIMEOUT         = 60
 
 # AWS Region for the distributed DynamoDB mutex

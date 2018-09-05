@@ -12,7 +12,7 @@ import "github.com/throttled/throttled"
 // Versioning
 //
 const Major = "0"
-const Minor = "2"
+const Minor = "3"
 const ContentType = "application/json; charset=utf8"
 
 // This will be overwritten during build. Do not try to manage it here.

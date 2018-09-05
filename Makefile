@@ -47,25 +47,30 @@ test_unit:
 
 
 ########################################
-### Localnet (Requirements: pip3 install aws-sam-cli)
+### Localnet
 
 localnet-start:
-	sam local start-api --env-vars config.json
+	build/f11 -webserver -no-recaptcha -no-rdb -no-limit
 
+localnet-lambda:
+	# (Requirements: pip3 install aws-sam-cli)
+	# Set up env.vars in template.yml since the --env-vars option doesn't seem to work
+	sam local start-api
 
 ########################################
 ### Release management (set up requirements manually)
 
 package:
-	if [ -z "$(AWS_NAME)" ]; then echo "Please set AWS_NAME for packaging." ; false ; fi
-	if [ -z "$(S3_BUCKET)" ]; then echo "Please set S3_BUCKET for packaging." ; false ; fi
-	zip "build/f11_${AWS_NAME}.zip" build/f11 template.yml
-	aws s3 cp "build/f11_${AWS_NAME}.zip" "s3://$(S3_BUCKET)/f11_${AWS_NAME}.zip"
-#	aws s3 cp "f11swagger.yml" "s3://$(S3BUCKET)/f11swagger.yml"
+	zip "build/f11.zip" build/f11
 
-deploy:
-	if [ -z "$(AWS_REGION)" ]; then echo "Please set AWS_REGION for deployment." ; false ; fi
-	sam deploy --template-file template.yml --stack-name "f11-${AWS_NAME}" --capabilities CAPABILITY_IAM --region "${AWS_REGION}"
+#deploy:
+#	if [ -z "$(AWS_REGION)" ]; then echo "Please set AWS_REGION for deployment." ; false ; fi
+#	sam deploy --template-file template.yml --stack-name "f11-${AWS_NAME}" --capabilities CAPABILITY_IAM --region "${AWS_REGION}"
 
-.PHONY: build build-linux check_tools update_tools get_tools get_vendor_deps test test_cli test_unit package deploy
+update-staging: build-linux package
+	aws lambda update-function-code --function-name "F11-staging" --zip-file fileb://build/f11.zip --region us-east-1
 
+update-prod: build-linux package
+	aws lambda update-function-code --function-name "F11-prod" --zip-file fileb://build/f11.zip --region us-east-1
+
+.PHONY: build build-linux check_tools update_tools get_tools get_vendor_deps test test_cli test_unit package update-staging update-prod

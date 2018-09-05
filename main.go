@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/aws/aws-lambda-go/events"
@@ -34,16 +35,22 @@ func LambdaHandler(req events.APIGatewayProxyRequest) (events.APIGatewayProxyRes
 		var err error
 		ctx, err := Initialization(context.NewInitialContext())
 		if err != nil {
-			log.Fatalf("initialization failed: %v\n", err)
+			log.Printf("initialization failed: %v\n", err)
+			errbody, _ := json.Marshal(context.ErrorMessage{
+//				Message: err.Error(),
+				Message: "System could not be initialized, please contact the administrator.",
+			})
+			return events.APIGatewayProxyResponse{
+				StatusCode: http.StatusInternalServerError,
+				Body:       string(errbody),
+			}, nil
 		}
 
 		r := AddRoutes(ctx)
-
 		muxLambda := gorillamux.New(r)
-
-		lambdaInitialized = true
 		lambdaProxy = muxLambda.Proxy
 
+		lambdaInitialized = true
 	}
 
 	return lambdaProxy(req)
@@ -77,7 +84,7 @@ func WebserverHandler(localCtx *context.InitialContext) {
 		sig := <-gracefulStop
 		log.Printf("caught signal: %+v", sig)
 		log.Print("waiting 2 seconds to finish processing")
-		time.Sleep(2*time.Second)
+		time.Sleep(2 * time.Second)
 		os.Exit(0)
 	}()
 
@@ -116,9 +123,9 @@ func main() {
 	flag.StringVar(&initialCtx.Send, "send", "", "send a transaction with the local configuration")
 
 	flag.BoolVar(&initialCtx.LocalExecution, "webserver", false, "run a local web-server instead of as an AWS Lambda function")
-	flag.StringVar(&initialCtx.ConfigFile, "config", "f11.conf", "read config from this local file (default: f11.conf) - Lambda uses environment variables")
-	flag.StringVar(&initialCtx.WebserverIp, "ip", "127.0.0.1", "IP to listen on (default: 127.0.0.1)")
-	flag.UintVar(&initialCtx.WebserverPort, "port", 3000, "Port to listen on (default: 3000)")
+	flag.StringVar(&initialCtx.ConfigFile, "config", "f11.conf", "read config from this local file")
+	flag.StringVar(&initialCtx.WebserverIp, "ip", "127.0.0.1", "IP to listen on")
+	flag.UintVar(&initialCtx.WebserverPort, "port", 3000, "Port to listen on")
 	flag.BoolVar(&initialCtx.DisableRDb, "no-rdb", false, "Disable the use of RedisDB")
 
 	flag.BoolVar(&initialCtx.DisableLimiter, "no-limit", false, "Disable rate-limiter")

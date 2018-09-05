@@ -15,11 +15,11 @@ import (
 	"github.com/dpapathanasiou/go-recaptcha"
 	"github.com/gorilla/mux"
 	"github.com/greg-szabo/dsync/ddb/sync"
-	rpcclient "github.com/tendermint/tendermint/rpc/client"
 	"log"
 	"net/http"
 	"os"
 	"os/user"
+	"strconv"
 )
 
 func MainHandler(ctx *context.Context, w http.ResponseWriter, r *http.Request) (status int, err error) {
@@ -31,7 +31,7 @@ func MainHandler(ctx *context.Context, w http.ResponseWriter, r *http.Request) (
 		Version string `json:"version"`
 	}{
 		Message: "",
-		Name:    ctx.Cfg.TestnetName,
+		Name:    ctx.TestnetName,
 		Version: defaults.Version,
 	})
 	return
@@ -103,8 +103,46 @@ func Initialization(initialContext *context.InitialContext) (ctx *context.Contex
 
 	}
 
-	log.Printf("config for %s loaded", ctx.Cfg.TestnetName)
+	ctx.Cdc = app.MakeCodec()
 
+	err = ctx.GetTestnetName()
+	if err != nil {
+		log.Print("underlying full node seems to have issues")
+		return
+	}
+
+	log.Printf("config for %s loaded", ctx.TestnetName)
+
+	ctx.SequenceMutex = sync.Mutex{
+		Name:      fmt.Sprintf("%s-sequence", ctx.TestnetName),
+		AWSRegion: ctx.Cfg.AWSRegion,
+	}
+
+	ctx.AccountNumberMutex = sync.Mutex{
+		Name:      fmt.Sprintf("%s-accountnumber", ctx.TestnetName),
+		AWSRegion: ctx.Cfg.AWSRegion,
+	}
+
+	ctx.BrokenFlagMutex = sync.Mutex{
+		Name:      fmt.Sprintf("%s-brokenflag", ctx.TestnetName),
+		AWSRegion: ctx.Cfg.AWSRegion,
+	}
+
+	err = ctx.CheckAndFixAccountDetails()
+	if err != nil {
+		return
+	}
+
+	// We read AccountNumber only once.
+	ctx.AccountNumberMutex.Lock()
+	ctx.AccountNumber, err = strconv.ParseInt(ctx.AccountNumberMutex.Value, 10, 64)
+	if err != nil {
+		ctx.AccountNumberMutex.Unlock()
+		return
+	}
+	ctx.AccountNumberMutex.Unlock()
+
+	// Create CLIContext
 	cliContext := sdkCtx.NewCLIContext().
 		WithCodec(ctx.Cdc).
 		WithLogger(os.Stdout).
@@ -112,49 +150,22 @@ func Initialization(initialContext *context.InitialContext) (ctx *context.Contex
 		WithNodeURI(ctx.Cfg.Node)
 	ctx.CLIContext = &cliContext
 
+	// Create TxContest
 	txCtx := authctx.TxContext{
-		ChainID:       ctx.Cfg.TestnetName,
-		Gas:           20000,
+		ChainID: ctx.TestnetName,
+		Gas:     20000,
 	}.WithCodec(ctx.Cdc)
-
 	ctx.TxContest = &txCtx
 
+	// Create Throttled limiter
 	err = createThrottledLimiter(ctx)
 	if err != nil {
 		return
 	}
 
-	ctx.Sequence = sync.Mutex{
-		Name:      ctx.Cfg.TestnetName,
-		AWSRegion: ctx.Cfg.AWSRegion,
-	}
-	ctx.BrokenFlag = sync.Mutex{
-		Name:      fmt.Sprintf("%s-brokenflag", ctx.Cfg.TestnetName),
-		AWSRegion: ctx.Cfg.AWSRegion,
-	}
-
-	ctx.BrokenFlag.Lock()
-	if ctx.BrokenFlag.Value == "broken" {
-
-		ctx.Sequence.Lock()
-		ctx.Sequence.Value = "0"
-//Todo: create a GetAccountSequence without using the KeyBase
-/*		seq, err :=	ctx.CLIContext.GetAccountSequence([]byte(ctx.Cfg.AccountAddress))
-		if err != nil {
-			return nil, err
-		}
-		ctx.Sequence.Value = string(seq)
-*/		ctx.Sequence.Unlock()
-
-		// Reset broken flag
-		ctx.BrokenFlag.Value = "0"
-	}
-	ctx.BrokenFlag.Unlock()
-
-	ctx.RpcClient = rpcclient.NewHTTP(ctx.Cfg.Node, "/websocket")
-	ctx.Cdc = app.MakeCodec()
-
 	recaptcha.Init(ctx.Cfg.RecaptchaSecret)
+
+	log.Print("initialized context")
 
 	return
 }
@@ -163,7 +174,7 @@ func GetPrivkeyBytesFromString(privkeystring string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(privkeystring)
 }
 
-func GetStringFromPrivkeyBytes(privkeybytes []byte) (string) {
+func GetStringFromPrivkeyBytes(privkeybytes []byte) string {
 	return base64.StdEncoding.EncodeToString(privkeybytes)
 }
 

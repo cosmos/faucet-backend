@@ -110,8 +110,7 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 		return
 	}
 
-	//Todo: Implement account check for enough coins
-	//Derive coin number from sequence number (c - s = remaining coins)
+	//Todo: (low prio) Implement account check for enough coins by deriving coin number from sequence number (c - s = remaining coins)
 
 	// build the transaction
 	msg := client.BuildMsg(from, to, coins)
@@ -122,17 +121,23 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 	// There's nothing to see here, move along.
 	memo := "faucet drop"
 
-	ctx.Sequence.Lock()
-	sequence, err := strconv.ParseInt(ctx.Sequence.Value, 10, 64)
+	// In case the previous run flagged a broken setup, try to fix it.
+	err = ctx.CheckAndFixAccountDetails()
 	if err != nil {
-		ctx.Sequence.Unlock()
+		return
+	}
+
+	ctx.SequenceMutex.Lock()
+	sequence, err := strconv.ParseInt(ctx.SequenceMutex.Value, 10, 64)
+	if err != nil {
+		ctx.SequenceMutex.Unlock()
 		return
 	}
 
 	// Message
 	signMsg := auth.StdSignMsg{
-		ChainID:       ctx.Cfg.TestnetName,
-		AccountNumber: ctx.Cfg.AccountNumber,
+		ChainID:       ctx.TestnetName,
+		AccountNumber: ctx.AccountNumber,
 		Sequence:      sequence,
 		Msgs:          []sdk.Msg{msg},
 		Memo:          memo,
@@ -143,7 +148,7 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 	// Get private key
 	privateKeyBytes, err := GetPrivkeyBytesFromString(ctx.Cfg.PrivateKey)
 	if err != nil {
-		ctx.Sequence.Unlock()
+		ctx.SequenceMutex.Unlock()
 		return
 	}
 	privateKey, err := cryptoAmino.PrivKeyFromBytes(privateKeyBytes)
@@ -154,7 +159,7 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 	sigs := []auth.StdSignature{{
 		PubKey:        publicKey,
 		Signature:     sig,
-		AccountNumber: ctx.Cfg.AccountNumber,
+		AccountNumber: ctx.AccountNumber,
 		Sequence:      sequence,
 	}}
 
@@ -164,10 +169,10 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 	// Broadcast to Tendermint
 	txBytes, err := ctx.Cdc.MarshalBinary(tx)
 	if err != nil {
-		ctx.Sequence.Unlock()
+		ctx.SequenceMutex.Unlock()
 		return
 	}
-	log.Printf("Sending transaction sequence %s", ctx.Sequence.Value)
+	log.Printf("Sending transaction sequence %s", ctx.SequenceMutex.Value)
 
 	cres := make(chan AsyncResponse, 1)
 	go func() {
@@ -189,19 +194,19 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 		var res *ctypes.ResultBroadcastTxCommit
 		res, err = response.Result, response.Error
 		if err != nil {
-			ctx.Sequence.Unlock()
+			ctx.SequenceMutex.Unlock()
 			return
 		}
-		log.Printf("Sent transaction sequence %s", ctx.Sequence.Value)
+		log.Printf("Sent transaction sequence %s", ctx.SequenceMutex.Value)
 		sequence++
-		ctx.Sequence.Value = strconv.FormatInt(sequence, 10)
-		ctx.Sequence.Unlock()
+		ctx.SequenceMutex.Value = strconv.FormatInt(sequence, 10)
+		ctx.SequenceMutex.Unlock()
 		return res.Height, res.Hash.String(), http.StatusOK, nil
 	case <-timeout:
-		ctx.BrokenFlag.Lock()
-		ctx.BrokenFlag.Value = "broken"
-		ctx.BrokenFlag.Unlock()
-		ctx.Sequence.Unlock()
+		ctx.BrokenFlagMutex.Lock()
+		ctx.BrokenFlagMutex.Value = "broken"
+		ctx.BrokenFlagMutex.Unlock()
+		ctx.SequenceMutex.Unlock()
 		err = errors.New("broadcasting transaction timed out")
 		return
 
