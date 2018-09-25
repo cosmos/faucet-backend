@@ -1,3 +1,4 @@
+// Context package defines primitives for generic context handling during execution.
 package context
 
 import (
@@ -17,10 +18,10 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"strconv"
 	"time"
 )
 
+// Context holds current execution details.
 type Context struct {
 
 	// Throttled Rate Limiter
@@ -29,16 +30,17 @@ type Context struct {
 	// Throttled Rate Limiter Store
 	Store throttled.GCRAStore
 
-	// Distributed Mutexes
+	// SequenceMutex stores the current last sequence number of the account on the testnet
 	SequenceMutex      sync.Mutex
+	// AccountNumberMutex stores the account number on the testnet for the respective wallet
 	AccountNumberMutex sync.Mutex
+	// BrokenFlagMutex stores if the last execution of the application was successful (tokens were sent)
 	BrokenFlagMutex    sync.Mutex
-	TestnetNameMutex   sync.Mutex
 
-	// We only need to read AccountNumber once at startup, we store it for subsequent use
+	// Deprecated: We only need to read AccountNumber once at startup, we store it for subsequent use
 	AccountNumber int64
 
-	// We only need to read TestnetName once at startup, we store it for subsequent use
+	// TestnetName returned from the full node
 	TestnetName string
 
 	// Application configuration
@@ -63,6 +65,7 @@ type Context struct {
 	TxContest *authctx.TxContext
 }
 
+// InitialContext holds the input parameter details at the start of execution.
 type InitialContext struct {
 	// --no-rdb disable RedisDB database usage
 	DisableRDb bool
@@ -82,33 +85,38 @@ type InitialContext struct {
 	// --webserver or --send was set
 	LocalExecution bool
 
-	// (--no-limit) Disable rate limiter
+	// --no-limit Disable rate limiter
 	DisableLimiter bool
 
-	// (--no-send) Disable transaction send to the blockchain network
+	// --no-send Disable transaction send to the testnet (dry-run)
 	DisableSend bool
 
-	// (--no-recaptcha) Disable recaptcha
+	// --no-recaptcha Disable recaptcha
 	DisableRecaptcha bool
 }
 
+// New creates a fresh Context.
 func New() *Context {
 	return &Context{}
 }
 
+// NewInitialContext creates a fresh InitialContext.
 func NewInitialContext() *InitialContext {
 	return &InitialContext{}
 }
 
+// ErrorMessage defines the message structure returned when an error happens.
 type ErrorMessage struct {
 	Message string `json:"message"`
 }
 
+// Handler is an abstraction layer to standardize web API returns, if an error happens.
 type Handler struct {
 	C *Context
 	H func(*Context, http.ResponseWriter, *http.Request) (int, error)
 }
 
+// ServeHTTP is a wrapper around web API calls, that adds a default Content-Type and formats outgoing error messages.
 func (fn Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", defaults.ContentType)
 	if status, err := fn.H(fn.C, w, r); err != nil {
@@ -121,67 +129,67 @@ func (fn Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Check if the last run was unsuccessful (node down, wrong parameters) and try to fix the values from the network
+// CheckAndFixAccountDetails checks, if the last run was unsuccessful (node down, wrong parameters)
+// and tries to fix the values from the testnet.
 func (ctx *Context) CheckAndFixAccountDetails() (err error) {
 
 	ctx.BrokenFlagMutex.Lock()
-	if ctx.BrokenFlagMutex.Value != "no" {
-		var httpClient = &http.Client{Timeout: 5 * time.Second}
-		var req *http.Response
-		var rawBody []byte
+	defer ctx.BrokenFlagMutex.Unlock()
 
-		req, err = httpClient.Get(fmt.Sprintf("%s/accounts/%s", ctx.Cfg.LCDNode, ctx.Cfg.AccountAddress))
-		if err != nil {
-			ctx.BrokenFlagMutex.Unlock()
-			return
-		}
-		defer req.Body.Close()
-
-		if req.StatusCode == http.StatusOK {
-			rawBody, err = ioutil.ReadAll(req.Body)
-			if err != nil {
-				ctx.BrokenFlagMutex.Unlock()
-				return
-			}
-		} else {
-			return errors.New(fmt.Sprintf("http error code %d calling LCD URL", req.StatusCode))
-		}
-
-		var accountDetails auth.Account
-		err = ctx.Cdc.UnmarshalJSON(rawBody, &accountDetails)
-		if err != nil {
-			ctx.BrokenFlagMutex.Unlock()
-			return
-		}
-
-		ctx.SequenceMutex.Lock()
-		ctx.SequenceMutex.Value = strconv.FormatInt(accountDetails.GetSequence(), 10)
-		ctx.SequenceMutex.Unlock()
-
-		ctx.AccountNumberMutex.Lock()
-		ctx.AccountNumberMutex.Value = strconv.FormatInt(accountDetails.GetAccountNumber(), 10)
-		ctx.AccountNumberMutex.Unlock()
-
-		// Reset broken flag
-		ctx.BrokenFlagMutex.Value = "no"
+	if ctx.BrokenFlagMutex.GetValueString() == "no" {
+		return
 	}
-	ctx.BrokenFlagMutex.Unlock()
 
+	var httpClient = &http.Client{Timeout: 5 * time.Second}
+	var req *http.Response
+	var rawBody []byte
+
+	req, err = httpClient.Get(fmt.Sprintf("%s/accounts/%s", ctx.Cfg.LCDNode, ctx.Cfg.AccountAddress))
+	if err != nil {
+		return
+	}
+	defer req.Body.Close()
+
+	if req.StatusCode == http.StatusOK {
+		rawBody, err = ioutil.ReadAll(req.Body)
+		if err != nil {
+			return
+		}
+	} else {
+		return errors.New(fmt.Sprintf("http error code %d calling LCD URL", req.StatusCode))
+	}
+
+	var accountDetails auth.Account
+	err = ctx.Cdc.UnmarshalJSON(rawBody, &accountDetails)
+	if err != nil {
+		return
+	}
+
+	ctx.SequenceMutex.Lock()
+	ctx.SequenceMutex.SetValueInt64(accountDetails.GetSequence())
+	ctx.SequenceMutex.Unlock()
+
+	ctx.AccountNumberMutex.Lock()
+	ctx.AccountNumberMutex.SetValueInt64(accountDetails.GetAccountNumber())
+	ctx.AccountNumberMutex.Unlock()
+
+	// Reset broken flag
+	ctx.BrokenFlagMutex.SetValueString("no")
 	return
 
 }
 
-// Raise the flag that the configuration is broken (parameter change, node timeout)
+// RaiseBrokenAccountDetails raises the flag that the configuration is broken (parameter change, node timeout).
 func (ctx *Context) RaiseBrokenAccountDetails(message string) {
 	if message == "no" {
 		message = ""
 	}
 	ctx.BrokenFlagMutex.Lock()
-	ctx.BrokenFlagMutex.Value = message
+	ctx.BrokenFlagMutex.SetValueString(message)
 	ctx.BrokenFlagMutex.Unlock()
 }
 
-// Get the testnet name from the node
+// GetTestnetName returns the testnet name from the node
 func (ctx *Context) GetTestnetName() (err error) {
 	var httpClient = &http.Client{Timeout: 2 * time.Second}
 	var req *http.Response

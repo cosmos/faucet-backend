@@ -19,9 +19,10 @@ import (
 	"net/http"
 	"os"
 	"os/user"
-	"strconv"
+	"time"
 )
 
+// MainHandler handles the requests coming to `/`.
 func MainHandler(ctx *context.Context, w http.ResponseWriter, r *http.Request) (status int, err error) {
 	status = http.StatusOK
 	w.WriteHeader(status)
@@ -37,6 +38,7 @@ func MainHandler(ctx *context.Context, w http.ResponseWriter, r *http.Request) (
 	return
 }
 
+// AddRoutes adds the routes of the different calls to GorillaMux.
 func AddRoutes(ctx *context.Context) (r *mux.Router) {
 
 	// Root and routes
@@ -55,6 +57,7 @@ func AddRoutes(ctx *context.Context) (r *mux.Router) {
 	return
 }
 
+// redact changes a string to XXXXXX - used to redact passwords when logging.
 func redact(s string) string {
 	if len(s) < 2 {
 		return "RD"
@@ -62,6 +65,7 @@ func redact(s string) string {
 	return "REDACTED"
 }
 
+// Initialization creates and populates the context and sets up connectivity to the testnet.
 func Initialization(initialContext *context.InitialContext) (ctx *context.Context, err error) {
 
 	ctx = context.New()
@@ -111,35 +115,34 @@ func Initialization(initialContext *context.InitialContext) (ctx *context.Contex
 		return
 	}
 
-	log.Printf("config for %s loaded", ctx.TestnetName)
+	log.Printf("config loaded, testnet name: %s", ctx.TestnetName)
 
 	ctx.SequenceMutex = sync.Mutex{
-		Name:      fmt.Sprintf("%s-sequence", ctx.TestnetName),
+		Name:      fmt.Sprintf("%s-%s-sequence", ctx.Cfg.ApiEnvironment, ctx.TestnetName),
 		AWSRegion: ctx.Cfg.AWSRegion,
-	}
+		Expiry:    60 * time.Second,
+	}.WithTimeout(70 * time.Second)
 
 	ctx.AccountNumberMutex = sync.Mutex{
-		Name:      fmt.Sprintf("%s-accountnumber", ctx.TestnetName),
+		Name:      fmt.Sprintf("%s-%s-accountnumber", ctx.Cfg.ApiEnvironment, ctx.TestnetName),
 		AWSRegion: ctx.Cfg.AWSRegion,
-	}
+		Expiry:    1 * time.Second,
+	}.WithTimeout(3 * time.Second)
 
 	ctx.BrokenFlagMutex = sync.Mutex{
-		Name:      fmt.Sprintf("%s-brokenflag", ctx.TestnetName),
+		Name:      fmt.Sprintf("%s-%s-brokenflag", ctx.Cfg.ApiEnvironment, ctx.TestnetName),
 		AWSRegion: ctx.Cfg.AWSRegion,
-	}
+		Expiry:    1 * time.Second,
+	}.WithTimeout(3 * time.Second)
 
 	err = ctx.CheckAndFixAccountDetails()
 	if err != nil {
 		return
 	}
 
-	// We read AccountNumber only once.
+	// This is not really a Mutex. We use the Mutex as a database store:
+	// read the value once and reuse it without checking the database.
 	ctx.AccountNumberMutex.Lock()
-	ctx.AccountNumber, err = strconv.ParseInt(ctx.AccountNumberMutex.Value, 10, 64)
-	if err != nil {
-		ctx.AccountNumberMutex.Unlock()
-		return
-	}
 	ctx.AccountNumberMutex.Unlock()
 
 	// Create CLIContext
@@ -170,14 +173,17 @@ func Initialization(initialContext *context.InitialContext) (ctx *context.Contex
 	return
 }
 
+// GetPrivkeyBytesFromString translates a string into a set of private key bytes.
 func GetPrivkeyBytesFromString(privkeystring string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(privkeystring)
 }
 
+// GetStringFromPrivkeyBytes translates private key bytes into a readable (base64 encoded) string.
 func GetStringFromPrivkeyBytes(privkeybytes []byte) string {
 	return base64.StdEncoding.EncodeToString(privkeybytes)
 }
 
+// GetPrivkeyBytesFromUserFile gets the private key in a byte array format form the local keystore.
 // ValarDragon is the best! (He wrote this function.)
 func GetPrivkeyBytesFromUserFile(name string, passphrase string) []byte {
 	usr, err := user.Current()

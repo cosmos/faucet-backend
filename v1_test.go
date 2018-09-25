@@ -1,19 +1,19 @@
 package main
 
 import (
-	"net/http"
-)
-
-import (
 	"github.com/cosmos/faucet-backend/context"
-	"github.com/cosmos/faucet-backend/defaults"
+	"github.com/stretchr/testify/assert"
+	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
-// Todo: implement V1ClaimHandler testing again. The first version was created when the complete implementation wasn't ready yet.
-func Test_ClaimHandlerV1(t *testing.T) {
-	req, err := http.NewRequest("GET", "/", nil)
+// TestClaimHandlerV1 tests the /v1/claim endpoint. Have your AWS credentials ready
+func TestClaimHandlerV1(t *testing.T) {
+
+	data := "{\"address\":\"cosmosaccaddr1kje2wjc66mc3u283dy80czej8m9su8ca5a8drz\"}"
+	req, err := http.NewRequest("POST", "/v1/claim", strings.NewReader(data))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,30 +23,12 @@ func Test_ClaimHandlerV1(t *testing.T) {
 	ctx.DisableRecaptcha = true
 	ctx.DisableLimiter = true
 	rr := httptest.NewRecorder()
-	handler := context.Handler{ctx, MainHandler}
+	handler := context.Handler{ctx, V1ClaimHandler}
 
 	handler.ServeHTTP(rr, req)
-	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("handler returned wrong status code: got %v want %v",
-			status, http.StatusOK)
-	}
+	status := rr.Code
+	assert.Equal(t,status,http.StatusOK)
 
-	expected := "{\"message\":\"\",\"name\":\"" + ctx.TestnetName + "\",\"version\":\"" + defaults.Version + "\"}\n"
-	if rr.Body.String() != expected {
-		t.Errorf("handler returned unexpected body: got %v want %v",
-			rr.Body.String(), expected)
-	}
-	/*
-		handler := context.Handler{ctx, V1ClaimHandler}
-		if status := rr.Code; status != http.StatusOK {
-			t.Errorf("handler returned wrong status code: got %v want %v",
-				status, http.StatusOK)
-		}
-
-		expected := "{\"message\":\"request submitted\"}\n"
-		if rr.Body.String() != expected {
-			t.Errorf("handler returned unexpected body: got %v want %v",
-				rr.Body.String(), expected)
-		}
-	*/
+	expected := "{\"message\":\"transaction committed\",\"hash\":\"SendDisabled\",\"height\":0}\n"
+	assert.Equal(t, expected, rr.Body.String())
 }

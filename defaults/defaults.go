@@ -1,30 +1,25 @@
+// Default package implements versioning primitives.
 package defaults
 
 import "github.com/throttled/throttled"
 
-//
-// This file contains the input parameters for the lambda function.
-// Lambda functions cannot take command-line parameters, hence they are baked into the binary.
-// The rest of the configuration is read from the DynamoDB table defined here.
-//
-
-//
-// Versioning
-//
+// Major version number.
 const Major = "0"
-const Minor = "3"
+
+// Minor version number.
+const Minor = "4"
+
+// Default Content-Type used for web calls.
 const ContentType = "application/json; charset=utf8"
 
-// This will be overwritten during build. Do not try to manage it here.
+// Release number. It will be overwritten during build. Do not try to manage it here.
 var Release = "0-dev"
 
-// Calculated value
+// Version compiled into a string.
 var Version = Major + "." + Minor + "." + Release
 
-///
-/// Rate limiter settings
-///
+// LimiterMaxRate sets the throttling limit
+var LimiterMaxRate = throttled.PerMin(10)
 
-var LimiterMaxRate = throttled.PerMin(60)
-
+// LimiterMaxBurst sets the maximum burst when the limit has been reached.
 var LimiterMaxBurst = 0

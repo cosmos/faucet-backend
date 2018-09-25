@@ -1,3 +1,6 @@
+// main package that executes the code
+//
+// F11 or faucet-backend is a web API that allows users to request tokens on a testnet.
 package main
 
 import (
@@ -20,12 +23,13 @@ import (
 	"time"
 )
 
-// Indicator if the AWS Lambda function is in the startup phase
+// lambdaInitialized is an indicator that tells if the AWS Lambda function is in the startup phase.
 var lambdaInitialized = false
 
 // Translates Gorilla Mux calls to AWS API Gateway calls
 var lambdaProxy func(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error)
 
+// LambdaHandler is the callback function when the application is set up as an AWS Lambda function.
 func LambdaHandler(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
 	if !lambdaInitialized {
@@ -57,6 +61,8 @@ func LambdaHandler(req events.APIGatewayProxyRequest) (events.APIGatewayProxyRes
 
 }
 
+// WebserverHandler is the function that is called when the `--webserver` parameter is invoked.
+// It sets up a local webserver for handling incoming requests.
 func WebserverHandler(localCtx *context.InitialContext) {
 	log.Print("webserver execution start")
 
@@ -93,7 +99,9 @@ func WebserverHandler(localCtx *context.InitialContext) {
 	}
 }
 
-func sendTransactionHandler(localCtx *context.InitialContext) {
+// SendTransactionHandler is the function that is called when the `--send` parameter is invoked.
+// It sends tokens to the specified address and then exits.
+func SendTransactionHandler(localCtx *context.InitialContext) {
 	log.Print("Send one transaction")
 
 	var err error
@@ -117,7 +125,6 @@ func main() {
 
 	initialCtx := context.NewInitialContext()
 
-	// All command-line parameters are only for development and troubleshooting purposes
 	flag.BoolVar(&versionSwitch, "version", false, "Return version number and exit.")
 	flag.StringVar(&extract, "extract", "", "Extract private key bytes from your local storage. Get passphrase from $PASSPHRASE environment variable")
 	flag.StringVar(&initialCtx.Send, "send", "", "send a transaction with the local configuration")
@@ -147,7 +154,7 @@ func main() {
 		} else {
 			//--send
 			if initialCtx.Send != "" {
-				sendTransactionHandler(initialCtx)
+				SendTransactionHandler(initialCtx)
 			} else {
 				//--webserver
 				if initialCtx.LocalExecution {

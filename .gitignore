@@ -1,4 +1,5 @@
 build/*
+tmp/*
 .idea/*
 vendor/*
 Gopkg.lock

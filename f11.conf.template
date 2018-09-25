@@ -1,5 +1,8 @@
+# Name of the environment where the function runs
+APIENVIRONMENT  = dev
+
 # Private key of the faucet wallet
-PRIVATEKEY      = get_one_with_the_f11_-export_option
+PRIVATEKEY      = get_one_with_the_f11_-extract_option
 
 # Public key of the faucet wallet
 PUBLICKEY       = gaiacli_keys_can_give_this_to_you

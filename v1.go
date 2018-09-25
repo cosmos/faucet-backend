@@ -16,9 +16,17 @@ import (
 	"github.com/tomasen/realip"
 	"log"
 	"net/http"
-	"strconv"
 )
 
+// AsyncResponse stores the results of an async broadcast transaction from the testnet
+type AsyncResponse struct {
+	Result *ctypes.ResultBroadcastTxCommit
+	Error  error
+}
+
+const broadcast_error = "broadcasting transaction timed out"
+
+// V1ClaimHandler processes incoming POST requests from the /v1/claim endpoint.
 func V1ClaimHandler(ctx *f11context.Context, w http.ResponseWriter, r *http.Request) (status int, err error) {
 	status = http.StatusInternalServerError
 
@@ -67,6 +75,9 @@ func V1ClaimHandler(ctx *f11context.Context, w http.ResponseWriter, r *http.Requ
 	if !ctx.DisableSend {
 		height, hash, status, err = V1SendTx(ctx, encodedAddress)
 		if err != nil {
+			if err.Error() == broadcast_error {
+				ctx.RaiseBrokenAccountDetails(broadcast_error)
+			}
 			return
 		}
 	}
@@ -85,6 +96,7 @@ func V1ClaimHandler(ctx *f11context.Context, w http.ResponseWriter, r *http.Requ
 	return
 }
 
+// V1SendTx sends a transaction on the testnet
 func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash string, status int, err error) {
 	status = http.StatusInternalServerError
 	// Get Hex addresses
@@ -128,16 +140,13 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 	}
 
 	ctx.SequenceMutex.Lock()
-	sequence, err := strconv.ParseInt(ctx.SequenceMutex.Value, 10, 64)
-	if err != nil {
-		ctx.SequenceMutex.Unlock()
-		return
-	}
+	defer ctx.SequenceMutex.Unlock()
+	sequence := ctx.SequenceMutex.GetValueInt64()
 
 	// Message
 	signMsg := auth.StdSignMsg{
 		ChainID:       ctx.TestnetName,
-		AccountNumber: ctx.AccountNumber,
+		AccountNumber: ctx.AccountNumberMutex.GetValueInt64(),
 		Sequence:      sequence,
 		Msgs:          []sdk.Msg{msg},
 		Memo:          memo,
@@ -148,7 +157,6 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 	// Get private key
 	privateKeyBytes, err := GetPrivkeyBytesFromString(ctx.Cfg.PrivateKey)
 	if err != nil {
-		ctx.SequenceMutex.Unlock()
 		return
 	}
 	privateKey, err := cryptoAmino.PrivKeyFromBytes(privateKeyBytes)
@@ -159,7 +167,7 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 	sigs := []auth.StdSignature{{
 		PubKey:        publicKey,
 		Signature:     sig,
-		AccountNumber: ctx.AccountNumber,
+		AccountNumber: ctx.AccountNumberMutex.GetValueInt64(),
 		Sequence:      sequence,
 	}}
 
@@ -169,10 +177,9 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 	// Broadcast to Tendermint
 	txBytes, err := ctx.Cdc.MarshalBinary(tx)
 	if err != nil {
-		ctx.SequenceMutex.Unlock()
 		return
 	}
-	log.Printf("Sending transaction sequence %s", ctx.SequenceMutex.Value)
+	log.Printf("Sending transaction sequence %s", ctx.SequenceMutex.GetValueString())
 
 	cres := make(chan AsyncResponse, 1)
 	go func() {
@@ -194,26 +201,15 @@ func V1SendTx(ctx *f11context.Context, toBech32 string) (height int64, hash stri
 		var res *ctypes.ResultBroadcastTxCommit
 		res, err = response.Result, response.Error
 		if err != nil {
-			ctx.SequenceMutex.Unlock()
 			return
 		}
-		log.Printf("Sent transaction sequence %s", ctx.SequenceMutex.Value)
+		log.Printf("Sent transaction sequence %s", ctx.SequenceMutex.GetValueString())
 		sequence++
-		ctx.SequenceMutex.Value = strconv.FormatInt(sequence, 10)
-		ctx.SequenceMutex.Unlock()
+		ctx.SequenceMutex.SetValueInt64(sequence)
 		return res.Height, res.Hash.String(), http.StatusOK, nil
 	case <-timeout:
-		ctx.BrokenFlagMutex.Lock()
-		ctx.BrokenFlagMutex.Value = "broken"
-		ctx.BrokenFlagMutex.Unlock()
-		ctx.SequenceMutex.Unlock()
-		err = errors.New("broadcasting transaction timed out")
+		err = errors.New(broadcast_error)
 		return
 
 	}
-}
-
-type AsyncResponse struct {
-	Result *ctypes.ResultBroadcastTxCommit
-	Error  error
 }

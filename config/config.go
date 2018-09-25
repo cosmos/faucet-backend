@@ -1,3 +1,4 @@
+// Config package declares primitives to handle dynamic configuration.
 package config
 
 import (
@@ -7,7 +8,9 @@ import (
 	"strings"
 )
 
+// Config holds a complete set of dynamic configuration.
 type Config struct {
+	ApiEnvironment  string   `json:"APIENVIRONMENT"`
 	PrivateKey      string   `json:"PRIVATEKEY"`
 	PublicKey       string   `json:"PUBLICKEY"`
 	AccountAddress  string   `json:"ACCOUNTADDRESS"`
@@ -22,6 +25,8 @@ type Config struct {
 	Timeout         int64    `json:"TIMEOUT"`
 }
 
+// GetConfigFromFile reads the configuration from an INI-style file and returns a Config struct.
+// See f11.conf.template for an example input file.
 func GetConfigFromFile(configFile string) (*Config, error) {
 	inicfg, err := ini.Load(configFile)
 	if err != nil {
@@ -29,6 +34,7 @@ func GetConfigFromFile(configFile string) (*Config, error) {
 	}
 
 	cfg := Config{
+		ApiEnvironment:  inicfg.Section("").Key("APIENVIRONMENT").String(),
 		PrivateKey:      inicfg.Section("").Key("PRIVATEKEY").String(),
 		PublicKey:       inicfg.Section("").Key("PUBLICKEY").String(),
 		AccountAddress:  inicfg.Section("").Key("ACCOUNTADDRESS").String(),
@@ -49,8 +55,10 @@ func GetConfigFromFile(configFile string) (*Config, error) {
 	return &cfg, nil
 }
 
+// GetConfigFromENV reads the configuration from environment variables and returns a Config struct.
 func GetConfigFromENV() (*Config, error) {
 	config := Config{
+		ApiEnvironment:  os.Getenv("APIENVIRONMENT"),
 		PrivateKey:      os.Getenv("PRIVATEKEY"),
 		PublicKey:       os.Getenv("PUBLICKEY"),
 		AccountAddress:  os.Getenv("ACCOUNTADDRESS"),

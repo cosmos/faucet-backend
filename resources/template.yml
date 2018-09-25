@@ -7,6 +7,7 @@ Resources:
       Policies: AmazonDynamoDBFullAccess
       Environment:
         Variables:
+          APIENVIRONMENT: "dev"
           PRIVATEKEY: "get_one_with_the_f11_"
           PUBLICKEY: "gaiacli_keys_can_give_this_to_you"
           ACCOUNTADDRESS: "gaiacli_keys_can_give_this_to_you"

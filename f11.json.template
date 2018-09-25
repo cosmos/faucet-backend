@@ -1,0 +1,18 @@
+{
+  "Variables":
+    {
+      "APIENVIRONMENT": "dev",
+      "PRIVATEKEY": "get_one_with_the_f11_-extract_option",
+      "PUBLICKEY": "gaiacli_keys_can_give_this_to_you",
+      "ACCOUNTADDRESS": "gaiacli_keys_can_give_this_to_you",
+      "NODE": "http://127.0.0.1:26657",
+      "LCDNODE": "http://127.0.0.1:1317",
+      "AMOUNT": "10steak",
+      "ORIGINS": "http://localhost",
+      "REDISENDPOINT": "get_one_from_redislabs",
+      "REDISPASSWORD": "get_one_from_redislabs",
+      "RECAPTCHASECRET": "get_one_from_Google",
+      "TIMEOUT": "60",
+      "AWSREGION": "us-east-1"
+    }
+}
