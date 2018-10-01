@@ -148,7 +148,12 @@ func main() {
 	} else {
 		//--extract
 		if extract != "" {
-			privateKeyBytes := GetPrivkeyBytesFromUserFile(extract, os.Getenv("PASSPHRASE"))
+			passphrase := os.Getenv("PASSPHRASE")
+			if passphrase == "" {
+				fmt.Println("Please set the PASSPHRASE environment variable.")
+				os.Exit(1)
+			}
+			privateKeyBytes := GetPrivkeyBytesFromUserFile(extract, passphrase)
 			privateKeyString := GetStringFromPrivkeyBytes(privateKeyBytes)
 			fmt.Println(privateKeyString)
 		} else {

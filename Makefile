@@ -1,5 +1,5 @@
 PACKAGES=$(shell go list ./... | grep -v '/vendor/')
-BUILD_NUMBER ?= 4
+BUILD_NUMBER ?= 0
 
 BUILD_FLAGS = -tags "netgo ledger" -ldflags "-extldflags \"-static\" -X github.com/cosmos/faucet-backend/defaults.Release=${BUILD_NUMBER}"
 
@@ -98,10 +98,50 @@ create-lambda-prod:
 	| jq -r .FunctionArn | tee tmp/lambdaprodarn.tmp
 
 create-api-staging:
+	#Create API and endpoints using swagger
+	if [ -z "$(AWS_ACCOUNT)" ]; then echo "Please set AWS_ACCOUNT to the 12-digit AWS account code." ; false ; fi
+	mkdir -p tmp
+	sed 's/@AWS_ACCOUNT@/$(AWS_ACCOUNT)/g' resources/f11-staging.json.template > tmp/f11-staging.json
+	aws apigateway import-rest-api --parameters endpointConfigurationTypes=REGIONAL --body 'file://tmp/f11-staging.json' | jq -r .id | tee tmp/apiid.tmp
+
+	#Remove possible old permission from API (POST /) to call lambda function
+	aws lambda remove-permission --function-name F11-staging --statement-id apigateway-perm || echo "Permission did not exist yet."
+
+	#Allow the API (GET /) to call the lambda function
+	aws lambda add-permission \
+	--function-name F11-staging \
+	--statement-id apigateway-perm \
+	--action lambda:InvokeFunction \
+	--principal apigateway.amazonaws.com \
+	--source-arn "arn:aws:execute-api:us-east-1:$(AWS_ACCOUNT):`cat tmp/apiid.tmp`/staging/GET/"
+
+	#Remove possible old permission from API (POST /v1/claim) to call lambda function
+	aws lambda remove-permission --function-name F11-staging --statement-id apigateway-perm-v1-claim-options || echo "Permission did not exist yet."
+
+	#Allow the API (POST /v1/claim) to call the lambda function
+	aws lambda add-permission \
+	--function-name F11-staging \
+	--statement-id apigateway-perm-v1-claim-options \
+	--action lambda:InvokeFunction \
+	--principal apigateway.amazonaws.com \
+	--source-arn "arn:aws:execute-api:us-east-1:$(AWS_ACCOUNT):`cat tmp/apiid.tmp`/staging/OPTIONS/v1/claim"
+
+	#Remove possible old permission from API (POST /v1/claim) to call lambda function
+	aws lambda remove-permission --function-name F11-staging --statement-id apigateway-perm-v1-claim || echo "Permission did not exist yet."
+
+	#Allow the API (POST /v1/claim) to call the lambda function
+	aws lambda add-permission \
+	--function-name F11-staging \
+	--statement-id apigateway-perm-v1-claim \
+	--action lambda:InvokeFunction \
+	--principal apigateway.amazonaws.com \
+	--source-arn "arn:aws:execute-api:us-east-1:$(AWS_ACCOUNT):`cat tmp/apiid.tmp`/staging/POST/v1/claim"
+
 
 #TODO: Make it a swagger template
 create-api-prod:
 	if [ -z "`which jq`" ]; then echo "Please install jq." ; false ; fi
+	if [ -z "$(AWS_ACCOUNT)" ]; then echo "Please set AWS_ACCOUNT to the 12-digit AWS account code." ; false ; fi
 	mkdir -p tmp
 
 	#Create the API Gateway
@@ -154,6 +194,17 @@ create-api-prod:
 	--status-code 200 \
 	--response-models "application/json=Empty"
 
+	#Remove possible old permission from API (POST /) to call lambda function
+	aws lambda remove-permission --function-name F11-prod --statement-id apigateway-perm || echo "Permission did not exist yet."
+
+	#Allow the API (GET /) to call the lambda function
+	aws lambda add-permission \
+	--function-name F11-prod \
+	--statement-id apigateway-perm \
+	--action lambda:InvokeFunction \
+	--principal apigateway.amazonaws.com \
+	--source-arn "arn:aws:execute-api:us-east-1:$(AWS_ACCOUNT):`cat tmp/apiid.tmp`/prod/GET/"
+
 ###
 ### Path: OPTIONS /v1/claim
 ###
@@ -205,6 +256,17 @@ create-api-prod:
 	--status-code 200 \
 	--response-models "application/json=Empty"
 
+	#Remove possible old permission from API (POST /v1/claim) to call lambda function
+	aws lambda remove-permission --function-name F11-prod --statement-id apigateway-perm-v1-claim-options || echo "Permission did not exist yet."
+
+	#Allow the API (POST /v1/claim) to call the lambda function
+	aws lambda add-permission \
+	--function-name F11-prod \
+	--statement-id apigateway-perm-v1-claim-options \
+	--action lambda:InvokeFunction \
+	--principal apigateway.amazonaws.com \
+	--source-arn "arn:aws:execute-api:us-east-1:$(AWS_ACCOUNT):`cat tmp/apiid.tmp`/prod/OPTIONS/v1/claim"
+
 ###
 ### Path: POST /v1/claim
 ###
@@ -244,6 +306,17 @@ create-api-prod:
 	--status-code 200 \
 	--response-models "application/json=Empty"
 
+	#Remove possible old permission from API (POST /v1/claim) to call lambda function
+	aws lambda remove-permission --function-name F11-prod --statement-id apigateway-perm-v1-claim || echo "Permission did not exist yet."
+
+	#Allow the API (POST /v1/claim) to call the lambda function
+	aws lambda add-permission \
+	--function-name F11-prod \
+	--statement-id apigateway-perm-v1-claim \
+	--action lambda:InvokeFunction \
+	--principal apigateway.amazonaws.com \
+	--source-arn "arn:aws:execute-api:us-east-1:$(AWS_ACCOUNT):`cat tmp/apiid.tmp`/prod/POST/v1/claim"
+
 ###
 ### Deploy
 ###
@@ -255,15 +328,17 @@ create-api-prod:
 	--stage-description "PROD deployment" \
 	--description "automated PROD deployment"
 
-	echo rm tmp/apiid.tmp tmp/apires.tmp tmp/apislashid.tmp tmp/apiclaimid.tmp
-
-update-staging: build-linux package
+update-lambda-staging:
+	if [ -z "`file build/f11 | grep ELF`" ]; then echo "Please build a linux binary using `make build-linux`." ; false ; fi
+	$(MAKE) package
 	aws lambda update-function-code --function-name "F11-staging" --zip-file fileb://build/f11.zip --region us-east-1
 
-update-prod: build-linux package
+update-lambda-prod:
+	if [ -z "`file build/f11 | grep ELF`" ]; then echo "Please build a linux binary using `make build-linux`." ; false ; fi
+	$(MAKE) package
 	aws lambda update-function-code --function-name "F11-prod" --zip-file fileb://build/f11.zip --region us-east-1
 
 list-lambda:
 	aws lambda list-functions --region us-east-1
 
-.PHONY: build build-linux check_tools update_tools get_tools get_vendor_deps test test_cli test_unit package create-lambda-staging create-lambda-prod update-staging update-prod
+.PHONY: build build-linux check_tools update_tools get_tools get_vendor_deps test test_cli test_unit package create-lambda-staging create-lambda-prod update-lambda-staging update-labmda-prod create-api-staging create-api-prod list-lambda

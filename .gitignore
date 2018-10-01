@@ -5,3 +5,5 @@ vendor/*
 Gopkg.lock
 f11.conf
 f11.json
+f11-staging.json
+f11-prod.json
