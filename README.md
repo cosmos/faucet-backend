@@ -74,16 +74,20 @@ When all is set, run:
 IAM_ROLE_ARN=arn:aws:iam::000000000000:role/faucet-lambda make create-lambda-staging
 ```
 
-### Create API gateway
-
-
-
 You can deploy a new version by re-uploading to the same infrastructure:
 ```bash
-make update-staging
+make update-lambda-staging
 ```
 
-## Improvements for the future
+### Create API gateway
+```bash
+make create-api-staging
+```
+This command will use a swagger template to create an API Gateway and connect the endpoints to the Lambda function. This does not need to be re-run, when the lambda function code is replaced by a newer version.
+
+Note: `create-api-prod` uses native `awscli` commands instead of a swagger template to create the API Gateway and the endpoints. This implementation requires the Lambda function ARN. This is saved under `tmp/lambdaprodarn.tmp` during the Lambda function creation. I think the swagger implementation in `create-api-staging` is nicer, but both are kept for now to evaluate which one is more resilient.
+
+# Improvements for the future and developer details
 
 - middleware.go: Let the API Gateway handle CORS, instead of handling it in code.
 - make more measurements on the usefulness of throttled. Maybe we don't need it since we have recaptcha.
