@@ -1,3 +1,5 @@
+> This repo is archived as of July 9, 2020 but made available for historical record.
+
 # Faucet-backend
 
 ## Overview
